@@ -1,0 +1,98 @@
+---
+import Console from '../layouts/Console.astro';
+// What each node is, who runs it, and whether a model is involved. The facts each node establishes
+// come from the API, so this page cannot drift from hcpagents.graph.
+const NODES: Record<string, [string, string, boolean]> = {
+  intake: ['Intake', 'Matches the sender to the HCP registry', false],
+  safety_screen: ['Safety screen', 'Keyword rules and the safety agent, either one is enough to stop.', true],
+  classify: ['Classify', 'Triage agent splits the questions; injection rules run beside it.', true],
+  scope_check: ['Scope check', 'Each question against the label for that country', false],
+  assemble: ['Assemble', 'Assembler agent picks block ids through two read-only tools.', true],
+  verify: ['Verify', 'Every sentence matched to a current approved block', false],
+  autonomy: ['Autonomy', 'Is this topic cleared for automatic replies here? Policy read from SSM.', false],
+};
+const AWS = [
+  ['Content store, cases, HCP 360, touches', 'DynamoDB', 'DynamoDB with point-in-time recovery'],
+  ['Audit ledger archive', 'S3 with Object Lock in compliance mode, 10 years', 'Same, plus a separate audit account'],
+  ['Ledger checkpoints', 'KMS asymmetric signing key', 'Same, key in the audit account'],
+  ['Who may do what', 'Verified Permissions with Cedar policies', 'Same'],
+  ['People and roles', 'Cognito user pool', 'IAM Identity Center federated to the company IdP'],
+  ['Routing table', 'Step Functions, generated from the graph', 'Same, Express workflows per inquiry'],
+  ['Handoffs to humans', 'EventBridge bus to SQS queues', 'Same, plus Veeva and Salesforce connectors'],
+  ['Per-country autonomy', 'SSM Parameter Store', 'AppConfig with staged rollout'],
+  ['Metrics and logs', 'CloudWatch', 'CloudWatch plus Langfuse traces'],
+  ['Model', 'Claude Haiku 5.5 through the Agent SDK', 'Claude on Bedrock in the EU region, Guardrails on top'],
+];
+---
+<Console title="Architecture" path="/">
+<section><div class="wrap tight">
+  <div class="head">
+    <div>
+      <h1 class="page">Every reply traced to approved content, or no reply at all.</h1>
+      <p>Medical information inquiries from doctors arrive on five channels. This platform reads each one, routes it through a fixed graph, and answers automatically only when every sentence comes from content that Medical, Legal and Regulatory approved and that is still current today. Everything else goes to a human in the loop with the reason written down.</p>
+    </div>
+    <div class="btns"><a class="btn dark" href="/inbox">Open the inbox</a><a class="btn" href="/proof">See the proof</a></div>
+  </div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">The graph</h2>
+  <p class="sub">Seven nodes run in order. After each one the engine checks the routing table below, and the first rule that matches decides where the case goes. Three nodes use the model, outlined in purple; none of them can choose a route or write a sentence.</p>
+  <div class="lanes" id="lanes">
+    {Object.entries(NODES).map(([k, [t, d, m]]) => <div class={m ? 'node model' : 'node'} data-node={k}><b>{t}</b>{d}<span class="by">{m ? 'Uses the model' : 'Plain code'}</span><span class="by" data-facts={k}></span></div>)}
+  </div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">The routing table</h2>
+  <p class="sub">Order is the policy: safety first, then identity, then intent, then content. The same table generates the Step Functions definition. Tests check the safety rules for every combination of facts, and that Step Functions routes like the code for one case per rule.</p>
+  <ol class="rules" id="rules"><li class="send"><span class="empty">Loading</span></li></ol>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">Who decides what</h2>
+  <p class="sub">The line between the AI and a human in the loop, and the work no AI touches at all.</p>
+  <div class="tri">
+    <div class="card"><h3><span class="dotm"></span>The AI does on its own</h3><ul><li>Screens for adverse events and special situations</li><li>Splits a message into questions and tags the topic</li><li>Picks approved block ids that answer each question</li><li>Sends a reply when every rule passes and the topic is cleared for that country</li></ul></div>
+    <div class="card w"><h3><span class="dotm"></span>A human in the loop decides</h3><ul><li>Any reply on a topic not cleared for automatic sending</li><li>Any reply with a question no approved block covers</li><li>Senders who are not verified HCPs, and unknown products</li><li>Turning automatic replies on or off per country</li></ul></div>
+    <div class="card f"><h3><span class="dotm"></span>No AI at all</h3><ul><li>Adverse event and special situation handling, owned by pharmacovigilance</li><li>Off-label answers, written by Medical</li><li>Writing or editing any medical sentence</li><li>Approving content, which stays in the MLR process</li></ul></div>
+  </div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">The agents</h2>
+  <p class="sub">Three single-purpose agents on the Claude Agent SDK, each pinned to <span id="model">claude-haiku-5-5</span> with no built-in tools, no settings files and no slash commands. Their output is structured JSON; code checks it before it becomes a fact.</p>
+  <div class="calls" id="agents"></div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">Who may do what</h2>
+  <p class="sub">Cedar policies in Verified Permissions. Every approve, reject, withdraw, autonomy change and agent tool call asks the policy store first, and the answer is written to the ledger with the policy file that decided it.</p>
+  <div id="cedar"></div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">On AWS</h2>
+  <p class="sub">The prototype runs every service locally on Floci, an AWS emulator, so the whole platform starts with one command and no cloud account. The right column is the production choice.</p>
+  <table class="tbl"><thead><tr><th>Job</th><th>In this prototype, on Floci</th><th>In production</th></tr></thead>
+  <tbody>{AWS.map(([j, p, r]) => <tr><td>{j}</td><td>{p}</td><td>{r}</td></tr>)}</tbody></table>
+</div></section>
+</Console>
+<script>
+import { api, esc, routeChip, fail } from '../lib/api';
+const a = await api('/api/architecture').catch((e) => { fail(document.getElementById('rules')!, e); throw e; });
+document.getElementById('model')!.textContent = a.model;
+for (const n of a.nodes) {
+  const el = document.querySelector(`[data-facts="${n.node}"]`);
+  if (el) el.textContent = `Sets ${n.facts.join(', ').replaceAll('_', ' ')}`;
+}
+const val = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v).replaceAll('_', ' '));
+document.getElementById('rules')!.innerHTML = a.routing.map((r: any) =>
+  `<li><code>${esc(r.fact.replaceAll('_', ' '))} is ${esc(val(r.value))}</code><span>${routeChip(r.route)}</span><span class="muted">${esc(r.why)}</span></li>`).join('')
+  + `<li class="send"><code>Every rule passed</code><span>${routeChip('send')}</span><span class="muted">${esc(a.send.why)}</span></li>`;
+const ROLE: Record<string, string> = { safety: 'Reads the message for adverse events and special situations, quoting the words it relied on.', triage: 'Splits the message into questions, tags topic, population and indication, and flags attempts to change the rules.', assembler: 'Searches approved content and returns block ids per question. It cannot see withdrawn or expired blocks.' };
+document.getElementById('agents')!.innerHTML = Object.entries(a.agents).map(([k, v]: [string, any]) =>
+  `<article class="call"><header><h4>${esc(k[0].toUpperCase() + k.slice(1))} agent</h4><span class="row"><span class="chip grey">${v.tools ? 'Two read-only MCP tools' : 'No tools'}</span><span class="chip grey">${v.max_turns} turn${v.max_turns > 1 ? 's' : ''} at most</span></span></header><p class="sub">${esc(ROLE[k] || '')}</p><details><summary class="muted">System prompt</summary><pre>${esc(v.system)}</pre></details></article>`).join('');
+document.getElementById('cedar')!.innerHTML = Object.entries(a.cedar).map(([f, t]) =>
+  `<details class="code"><summary>${esc(f)}</summary><pre>${esc(t)}</pre></details>`).join('');
+</script>

@@ -1,0 +1,45 @@
+{
+ "output": {
+  "answers": [
+   {
+    "question": "Are there interactions between Ombrexa and strong CYP3A4 inhibitors such as clarithromycin?",
+    "block_ids": []
+   }
+  ],
+  "uncovered": [
+   "Are there interactions between Ombrexa and strong CYP3A4 inhibitors such as clarithromycin? (no approved content returned for product OMB, country JP, topic 'interactions')"
+  ]
+ },
+ "tool_calls": [
+  {
+   "tool": "mcp__mi__search_approved_content",
+   "input": {
+    "product": "OMB",
+    "country": "JP",
+    "topic": "interactions"
+   },
+   "allowed": true,
+   "reason": "Verified Permissions: ALLOW (agents.cedar)",
+   "returned": []
+  }
+ ],
+ "usage": {
+  "input_tokens": 4,
+  "output_tokens": 416,
+  "cache_read_input_tokens": 2652,
+  "cache_creation_input_tokens": 984
+ },
+ "model_usage": {
+  "claude-haiku-5-5": {
+   "inputTokens": 4,
+   "outputTokens": 416
+  }
+ },
+ "cost_usd": 0.000432,
+ "agent": "assembler",
+ "key": "30313c80af3128bc5206ae9b",
+ "prompt_version": "2026-10-15.1",
+ "model": "claude-haiku-5-5",
+ "user_prompt": "{\"product\": \"OMB\", \"country\": \"JP\", \"questions\": [{\"text\": \"Are there interactions between Ombrexa and strong CYP3A4 inhibitors such as clarithromycin?\", \"topic\": \"interactions\"}]}",
+ "recorded_at": "2026-10-15T18:00:15+00:00"
+}

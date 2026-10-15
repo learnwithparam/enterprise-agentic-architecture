@@ -1,0 +1,9 @@
+# Floci emulates the AWS services the platform uses, on one port. The Docker socket lets it start
+# its Cedar sidecar for Verified Permissions.
+services:
+  floci:
+    image: floci/floci:2.3.0
+    ports:
+      - "4566:4566"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

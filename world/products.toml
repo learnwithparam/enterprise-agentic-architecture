@@ -1,0 +1,78 @@
+# Synthetic. Quillon Biopharma, Veltrona and Ombrexa are invented for this workshop.
+# None of this is real labelling and none of it is medical advice.
+
+company = "Quillon Biopharma"
+
+[[product]]
+code = "VEL"
+brand = "Veltrona"
+generic = "zelocitinib"
+form = "15 mg film-coated tablets"
+
+[[product]]
+code = "OMB"
+brand = "Ombrexa"
+generic = "ombrelast"
+form = "200 microgram inhalation powder"
+
+# What each country's approved label covers. A question outside this is off-label
+# and goes to a medical reviewer with no AI draft.
+[[scope]]
+product = "VEL"
+country = "US"
+populations = ["adult", "adolescent"]
+indications = ["plaque_psoriasis"]
+
+[[scope]]
+product = "VEL"
+country = "DE"
+populations = ["adult"]
+indications = ["plaque_psoriasis"]
+
+[[scope]]
+product = "VEL"
+country = "JP"
+populations = ["adult"]
+indications = ["plaque_psoriasis", "psoriatic_arthritis"]
+
+[[scope]]
+product = "OMB"
+country = "US"
+populations = ["adult"]
+indications = ["copd"]
+
+[[scope]]
+product = "OMB"
+country = "DE"
+populations = ["adult"]
+indications = ["copd"]
+
+[[scope]]
+product = "OMB"
+country = "JP"
+populations = ["adult"]
+indications = ["copd"]
+
+[[country]]
+code = "US"
+name = "United States"
+regulator = "FDA"
+promo_cap_30d = 4
+email_consent = "opt_out"
+ai_disclosure = "TPL-AI-US"
+
+[[country]]
+code = "DE"
+name = "Germany"
+regulator = "BfArM"
+promo_cap_30d = 2
+email_consent = "double_opt_in"
+ai_disclosure = "TPL-AI-DE"
+
+[[country]]
+code = "JP"
+name = "Japan"
+regulator = "PMDA"
+promo_cap_30d = 3
+email_consent = "opt_in"
+ai_disclosure = "TPL-AI-JP"

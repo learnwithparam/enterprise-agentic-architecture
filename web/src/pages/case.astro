@@ -1,0 +1,161 @@
+---
+import Console from '../layouts/Console.astro';
+---
+<Console title="Case" path="/case">
+<section><div class="wrap tight" id="top"><p class="empty">Loading</p></div></section>
+<section><div class="wrap tight">
+  <div class="case">
+    <div>
+      <h2 class="sec">How it was decided</h2>
+      <p class="sub">Each node sets facts. The first routing rule that matches stops the graph.</p>
+      <ol class="trace" id="trace"></ol>
+    </div>
+    <div>
+      <h2 class="sec">The reply</h2>
+      <p class="sub" id="replysub"></p>
+      <div class="paper" id="reply"></div>
+    </div>
+  </div>
+</div></section>
+<section><div class="wrap tight">
+  <h2 class="sec">Agent calls and guards</h2>
+  <p class="sub">What each agent was asked, what it returned, and every tool call it tried with the Cedar decision that allowed or blocked it. In replay the recorded tool calls run through the guards again.</p>
+  <div class="calls" id="calls"></div>
+</div></section>
+<section><div class="wrap tight">
+  <h2 class="sec">Ledger entries for this case</h2>
+  <p class="sub">Append-only and hash-chained. Each entry carries the hash of the one before it; every tenth is signed with a KMS key and copied to a locked S3 archive.</p>
+  <div id="ledger"></div>
+</div></section>
+</Console>
+<script>
+import { api, esc, routeChip, channel, block, STATUS, usd, short, when, toast, fail } from '../lib/api';
+
+const id = new URLSearchParams(location.search).get('id') || '';
+const top = document.getElementById('top')!;
+const NODE: Record<string, string> = { intake: 'Intake', safety_screen: 'Safety screen', classify: 'Classify', scope_check: 'Scope check', assemble: 'Assemble', verify: 'Verify', autonomy: 'Autonomy' };
+const ORDER = Object.keys(NODE);
+const val = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v).replaceAll('_', ' '));
+
+function nodeText(n: any): string {
+  const d = n.detail;
+  switch (n.node) {
+    case 'intake': return esc(d);
+    case 'safety_screen': return d.length ? `${d.length} signal${d.length > 1 ? 's' : ''} found` : 'No adverse event or special situation found by the rules or the safety agent.';
+    case 'classify': return `${d.questions.length} question${d.questions.length === 1 ? '' : 's'}${d.questions.map((q: any) => `<br>"${esc(q.text)}" <span class="chip grey">${esc(q.topic.replaceAll('_', ' '))}</span>`).join('')}`;
+    case 'scope_check': return d.reasons.length ? esc(d.reasons.join('. ')) : 'Every question is inside the approved label for this country.';
+    case 'assemble': return d.answers.map((a: any) => `${a.block_ids.map((b: string) => block(b)).join(' ') || '<span class="chip red">No block</span>'}`).join(' ') + (d.uncovered.length ? `<br>Not covered: ${esc(d.uncovered.join('; '))}` : '') + (d.rejected_ids.length ? `<br>Ids refused by code: ${esc(d.rejected_ids.join(', '))}` : '');
+    case 'verify': return d.length ? esc(d.join('. ')) : 'Every sentence matched a current approved block.';
+    case 'autonomy': return d.reasons.length ? esc(d.reasons.join('. ')) : 'Every topic is cleared for automatic replies in this country.';
+  }
+  return '';
+}
+
+function trace(c: any) {
+  const ran = Object.fromEntries(c.nodes.map((n: any) => [n.node, n]));
+  const hitFact = c.decision.fact;
+  const last = c.nodes[c.nodes.length - 1].node;
+  return ORDER.map((k) => {
+    const n = ran[k];
+    if (!n) return `<li class="skipped"><span class="dot skip"></span><h4>${NODE[k]}</h4><p>Not run. The route was already decided.</p></li>`;
+    const facts = Object.entries(n.facts).map(([f, v]) => `<span class="fact${f === hitFact ? ' hit' : ''}">${esc(f.replaceAll('_', ' '))} <b>${esc(val(v))}</b></span>`).join('');
+    const stop = k === last;
+    return `<li><span class="dot ${stop ? 'stop' : 'pass'}"></span><h4>${NODE[k]} <small>${n.ms} ms</small></h4><div class="facts">${facts}</div><p>${nodeText(n)}</p>${stop ? `<div class="decision"><b>${c.decision.rule < 10 ? `Rule ${c.decision.rule + 1} matched` : 'Every rule passed'}: ${routeChip(c.route)}</b>${esc(c.decision.why)}</div>` : ''}</li>`;
+  }).join('');
+}
+
+function stapled(c: any) {
+  const check = c.status === 'blocked_at_send' || c.status === 'sent' ? c.send_check || c.verification : c.verification;
+  const roles = Object.fromEntries(c.draft.segments.map((s: any) => [s.block_id, s.role]));
+  const rows = check.sentences.map((s: any) => {
+    const now = c.content_now?.[s.block_id];
+    const stale = now && !now.current;
+    const role = roles[s.block_id] || 'answer';
+    return `<li class="${role}${!s.ok || stale ? ' bad' : ''}"><span>${esc(s.sentence)}</span><span class="rail"><b>${esc(s.block_id || 'No source')}${s.version ? ` v${s.version}` : ''}</b>${s.ok ? esc(s.mlr_ref) : esc(s.reason)}${stale && s.ok ? `<span>Now: ${esc(now.why_not)}</span>` : ''}</span></li>`;
+  }).join('');
+  const uniq = [...new Set(check.problems.map((p: string) => p.replace('Ungrounded sentence: ', '')))];
+  const problems = uniq.length ? `<p class="empty err">${esc(uniq.join('. '))}</p>` : '';
+  return `<div class="doc reply"><div class="dt"><div><b>Reply to ${esc(c.hcp?.name || 'sender')}</b><span class="dsub">${esc(c.product)}, ${esc(c.country)}, ${esc(STATUS[c.status] || c.status)}${c.sent_at ? ` ${esc(when(c.sent_at))}` : ''}</span></div><span class="dst">${check.sentences.length} sentences, ${check.sentences.filter((s: any) => s.ok).length} traced</span></div><ol class="staple">${rows}</ol>${problems}<div class="legend"><span><i></i>Answer block</span><span class="s"><i></i>Safety information</span><span class="d"><i></i>AI disclosure</span><span class="t"><i></i>Template</span></div></div>`;
+}
+
+const STAMP: Record<string, [string, string, string]> = {
+  pv: ['Not answered', 'red', 'This message describes a possible adverse event or special situation. Pharmacovigilance owns it from here and has its own clock. The AI drafted nothing, and the case went to the pharmacovigilance intake queue with the quoted words below.'],
+  offlabel: ['Not answered', 'red', 'The question is outside the approved label in this country. Medical writes any reply by hand; the AI does not draft off-label content.'],
+  decline: ['Not answered', 'red', 'No reply was drafted. The reason is recorded in the ledger.'],
+  review: ['Medical writes the reply', 'wait', 'Approved content does not cover every question, so the AI has no complete draft to offer. A medical reviewer writes the reply by hand.'],
+  specialist: ['Passed to a specialist', 'wait', 'A medical information specialist reads this and decides what to do. The AI drafted nothing.'],
+};
+
+function stamp(c: any) {
+  const [t, tone, p] = STAMP[c.route] || ['Not answered', 'red', ''];
+  const sig = c.signals?.length ? `<ul class="signals">${c.signals.map((s: any) => `<li><span class="chip red">${esc(s.kind)}</span> <mark>${esc(s.quote)}</mark> <span class="muted">found by ${esc(s.source)}</span></li>`).join('')}</ul>` : '';
+  const inj = c.injection?.rules?.length || c.injection?.model ? `<ul class="signals">${(c.injection.rules || []).map((r: string) => `<li><span class="chip red">rule</span> <mark>${esc(r)}</mark></li>`).join('')}${c.injection.model ? '<li><span class="chip red">triage agent</span> flagged an attempt to change its instructions</li>' : ''}</ul>` : '';
+  return `<div class="stamp"><span class="mark ${tone === 'wait' ? 'wait' : ''}">${t}</span><p>${esc(p)}</p><p><b>${esc(c.decision.why)}</b></p>${sig}${inj}</div>`;
+}
+
+function decide(c: any) {
+  if (!c.draft || !['awaiting_review', 'blocked_at_send'].includes(c.status)) return '';
+  if (c.status === 'blocked_at_send') return `<div class="decide"><p>The draft failed its check at the moment of sending, because content it used is no longer current. Nothing was sent. Reject it so Medical writes a new reply.</p><textarea id="note" aria-label="Reason for rejecting" placeholder="Reason">Content withdrawn after drafting</textarea><div class="btns"><button class="btn dark" id="reject">Reject</button></div></div>`;
+  return `<div class="decide"><p>A medical reviewer for ${esc(c.country)} approves or rejects this draft. Approving runs the sentence check again against content as it is now; if a block was withdrawn since drafting, the send is blocked.</p><textarea id="note" aria-label="Reason for rejecting" placeholder="Reason, if you reject"></textarea><div class="btns"><button class="btn dark" id="approve">Approve and send</button><button class="btn" id="reject">Reject</button></div></div>`;
+}
+
+function calls(c: any) {
+  const spans = c.trace?.spans || [];
+  return c.agent_calls.map((a: any, i: number) => {
+    const sp = spans.find((s: any) => s.name === `agent.${a.agent}`);
+    const u = a.usage || {};
+    const tools = a.tool_calls.length ? `<ul class="tools">${a.tool_calls.map((t: any) => `<li>${t.allowed ? '<span class="chip green">Allowed</span>' : '<span class="chip red">Blocked</span>'}<span><b>${esc(t.tool.replace('mcp__mi__', ''))}</b> ${esc(JSON.stringify(t.input))}<br><span class="muted">${esc(t.reason)}. Returned ${t.returned?.length ? t.returned.map((b: string) => block(b)).join(' ') : 'nothing'}</span></span></li>`).join('')}</ul>` : '';
+    return `<article class="call"><header><h4>${esc(a.agent[0].toUpperCase() + a.agent.slice(1))} agent</h4><span class="meta"><span>${esc(a.mode)}</span><span class="num">${(u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0)} in, ${u.output_tokens || 0} out</span><b class="num">${usd(a.cost_usd)}</b></span></header>${tools}${sp ? `<pre>${esc(JSON.stringify(sp.output, null, 1))}</pre>` : ''}</article>`;
+  }).join('') || '<p class="empty">No agent was called.</p>';
+}
+
+function summary(e: any): string {
+  switch (e.type) {
+    case 'case_received': return `From ${channel(e.channel)}, text hash ${short(e.text_sha256)}`;
+    case 'agent_call': return `${esc(e.agent)} agent, ${esc(e.model)}, prompt ${esc(e.prompt_version)}, ${esc(e.mode)}`;
+    case 'tool_call': return `${esc(e.tool?.replace('mcp__mi__', ''))} ${e.allowed ? 'allowed' : 'blocked'}`;
+    case 'routed': return `Route ${routeChip(e.route)}`;
+    case 'reply_sent': return `Sent${e.approved_by ? ` after approval by ${esc(e.approved_by)}` : ' automatically'}, ${e.blocks.length} blocks`;
+    case 'authz': return `${esc(e.user)} ${esc(e.action)} ${e.allowed ? 'allowed' : 'denied'}: ${esc(e.reason)}`;
+    case 'send_blocked': return `Nothing sent: ${esc([...new Set(e.problems.map((p: string) => p.replace('Ungrounded sentence: ', '')))].join('. '))}`;
+    case 'draft_invalidated': return `Draft failed its check: ${block(e.block)} was withdrawn`;
+    case 'approved': return `Approved by ${esc(e.user)}`;
+    case 'rejected': return `Rejected by ${esc(e.user)}: ${esc(e.note)}`;
+    default: return esc(JSON.stringify(Object.fromEntries(Object.entries(e).filter(([k]) => !['at', 'case', 'type'].includes(k)))));
+  }
+}
+
+async function load() {
+  let c: any;
+  try { c = await api(`/api/cases/${encodeURIComponent(id)}`); } catch (e) { fail(top, e); return; }
+  document.title = `Case ${c.id}, Quillon Medical Information`;
+  if (c.redacted) {
+    top.innerHTML = `<div class="head"><div><h1 class="page">Case ${esc(c.id)}</h1><p>${esc(c.redacted)}</p></div><div class="row">${routeChip(c.route)}</div></div>`;
+    document.querySelectorAll('main section:not(:first-child)').forEach((s) => s.remove());
+    return;
+  }
+  const inq = c.inquiry;
+  top.innerHTML = `<div class="head"><div><h1 class="page">Case ${esc(c.id)}</h1><p>${esc(c.decision.why)}</p></div><div class="row">${routeChip(c.route)}<span class="chip grey">${esc(STATUS[c.status] || c.status)}</span></div></div>
+    <blockquote class="quote">${esc(inq.text)}</blockquote>
+    <div class="meta"><span>From <b>${esc(c.hcp?.name || inq.sender || 'Unknown')}</b>${c.hcp ? `, ${esc(c.hcp.specialty)}, ${esc(c.hcp.city)}` : ''}</span><span>${channel(inq.channel)}</span><span>Received <b class="num">${esc(when(inq.received))}</b></span><span>Product <b>${esc(c.product || 'none')}</b></span><span>Country <b>${esc(c.country)}</b></span><span>Cost <b class="num">${usd(c.cost_usd)}</b></span><span>Latency <b class="num">${c.latency_ms} ms</b></span><span>Agents <b>${esc(c.mode)}</b></span></div>
+    ${c.history?.length ? `<ul class="tl">${c.history.map((h: any) => `<li><time>${esc(when(h.at))}</time><span>${esc(h.event)}${h.detail ? `<br><span class="muted">${esc(Array.isArray(h.detail) ? h.detail.join('. ') : h.detail)}</span>` : ''}</span></li>`).join('')}</ul>` : ''}`;
+  document.getElementById('trace')!.innerHTML = trace(c);
+  document.getElementById('replysub')!.textContent = c.draft
+    ? 'Every sentence is a whole sentence from an approved block. The margin shows which block, which version and its MLR approval.'
+    : 'The AI wrote nothing for this case.';
+  document.getElementById('reply')!.innerHTML = (c.draft ? stapled(c) : stamp(c)) + decide(c);
+  document.getElementById('calls')!.innerHTML = calls(c);
+  document.getElementById('ledger')!.innerHTML = `<table class="tbl chain"><thead><tr><th>Seq</th><th>Entry</th><th>What happened</th><th>Hash</th><th>Previous</th></tr></thead><tbody>${c.ledger.map((r: any) => `<tr><td class="num">${r.seq}</td><td class="ty">${esc(r.entry.type.replaceAll('_', ' '))}</td><td>${summary(r.entry)}</td><td class="hash">${short(r.hash)}${r.signature ? '<br><span class="chip green">Signed</span>' : ''}</td><td class="hash">${short(r.prev)}</td></tr>`).join('')}</tbody></table>`;
+
+  document.getElementById('approve')?.addEventListener('click', async () => {
+    try { const d = await api(`/api/cases/${encodeURIComponent(id)}/approve`, {}); toast(d.status === 'sent' ? 'Approved and sent' : 'Send blocked: the draft no longer matches current content', d.status === 'sent' ? 'ok' : 'err'); load(); }
+    catch (e: any) { toast(e.message, 'err'); load(); }
+  });
+  document.getElementById('reject')?.addEventListener('click', async () => {
+    const note = (document.getElementById('note') as HTMLTextAreaElement).value;
+    try { await api(`/api/cases/${encodeURIComponent(id)}/reject`, { note }); toast('Rejected'); load(); }
+    catch (e: any) { toast(e.message, 'err'); load(); }
+  });
+}
+load();
+</script>

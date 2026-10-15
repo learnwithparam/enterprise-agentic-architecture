@@ -1,0 +1,233 @@
+# Synthetic healthcare professionals. Each one exists as a different record in each channel:
+# the CRM, the marketing platform, the contact centre and the portal. The registry id ties them together.
+
+[[hcp]]
+id = "hcp-kaya"
+name = "Dr. Elif Kaya"
+specialty = "Dermatology"
+country = "DE"
+city = "Berlin"
+registry_id = "DE-LANR-7731904"
+consent = { email = true, rep_visit = true, phone = true }
+records = { crm = "CRM-DE-00412", marketing = "mk-88213", contact_centre = "+49 30 5550 1904", portal = "ekaya@praxis-kaya.example" }
+
+[[hcp]]
+id = "hcp-brenner"
+name = "Dr. Jonas Brenner"
+specialty = "Dermatology"
+country = "DE"
+city = "Munich"
+registry_id = "DE-LANR-4410288"
+consent = { email = false, rep_visit = true, phone = true }
+records = { crm = "CRM-DE-00977", marketing = "mk-90155", contact_centre = "+49 89 5550 0288", portal = "brenner@derma-muc.example" }
+
+[[hcp]]
+id = "hcp-lorenz"
+name = "Dr. Felix Lorenz"
+specialty = "Dermatology"
+country = "DE"
+city = "Hamburg"
+registry_id = "DE-LANR-6620137"
+consent = { email = true, rep_visit = false, phone = true }
+records = { crm = "CRM-DE-01133", marketing = "mk-91207", contact_centre = "+49 40 5550 0137", portal = "lorenz@hautarzt-hh.example" }
+
+[[hcp]]
+id = "hcp-weiss"
+name = "Dr. Hanna Weiss"
+specialty = "Pulmonology"
+country = "DE"
+city = "Cologne"
+registry_id = "DE-LANR-3398812"
+consent = { email = true, rep_visit = true, phone = false }
+records = { crm = "CRM-DE-00655", marketing = "mk-87340", contact_centre = "+49 221 5550 8812", portal = "weiss@lunge-koeln.example" }
+
+[[hcp]]
+id = "hcp-okafor"
+name = "Dr. Grace Okafor"
+specialty = "Dermatology"
+country = "US"
+city = "Chicago"
+registry_id = "US-NPI-1730284456"
+consent = { email = true, rep_visit = true, phone = true }
+records = { crm = "CRM-US-20481", marketing = "mk-10422", contact_centre = "+1 312 555 0144", portal = "gokafor@lakeshore-derm.example" }
+
+[[hcp]]
+id = "hcp-mills"
+name = "Dr. Daniel Mills"
+specialty = "Pulmonology"
+country = "US"
+city = "Denver"
+registry_id = "US-NPI-1952036671"
+consent = { email = true, rep_visit = false, phone = true }
+records = { crm = "CRM-US-21907", marketing = "mk-11873", contact_centre = "+1 303 555 0171", portal = "dmills@frontrange-lung.example" }
+
+[[hcp]]
+id = "hcp-sato"
+name = "Dr. Kenji Sato"
+specialty = "Pulmonology"
+country = "JP"
+city = "Osaka"
+registry_id = "JP-MDR-0451120"
+consent = { email = true, rep_visit = true, phone = true }
+records = { crm = "CRM-JP-30218", marketing = "mk-50199", contact_centre = "+81 6 5550 1120", portal = "k.sato@osaka-kokyuki.example" }
+
+[[hcp]]
+id = "hcp-ito"
+name = "Dr. Yui Ito"
+specialty = "Dermatology"
+country = "JP"
+city = "Tokyo"
+registry_id = "JP-MDR-0398871"
+consent = { email = false, rep_visit = true, phone = true }
+records = { crm = "CRM-JP-30744", marketing = "mk-50631", contact_centre = "+81 3 5550 8871", portal = "y.ito@ginza-hifuka.example" }
+
+# What each channel did, before this platform existed. Four systems, no shared view.
+[[touch]]
+hcp = "hcp-kaya"
+on = "2026-10-01"
+channel = "crm"
+kind = "rep_visit"
+product = "VEL"
+promotional = true
+summary = "Rep visit: Veltrona launch detail aid, left a dosing card."
+
+[[touch]]
+hcp = "hcp-kaya"
+on = "2026-10-03"
+channel = "marketing"
+kind = "email"
+product = "VEL"
+promotional = true
+summary = "Email campaign: Veltrona once-daily dosing."
+content = "VEL-DE-DOSE"
+
+[[touch]]
+hcp = "hcp-kaya"
+on = "2026-10-06"
+channel = "contact_centre"
+kind = "call"
+product = "VEL"
+promotional = false
+summary = "Called Medical Information about storage in summer heat; answered from the SmPC."
+
+[[touch]]
+hcp = "hcp-kaya"
+on = "2026-10-08"
+channel = "marketing"
+kind = "email"
+product = "VEL"
+promotional = true
+summary = "Email campaign: Veltrona patient support programme."
+
+[[touch]]
+hcp = "hcp-okafor"
+on = "2026-09-22"
+channel = "crm"
+kind = "rep_visit"
+product = "VEL"
+promotional = true
+summary = "Rep visit: discussed adolescent dosing data."
+
+[[touch]]
+hcp = "hcp-okafor"
+on = "2026-10-02"
+channel = "portal"
+kind = "chat"
+product = "VEL"
+promotional = false
+summary = "Portal chat: downloaded the prescribing information."
+
+[[touch]]
+hcp = "hcp-mills"
+on = "2026-09-30"
+channel = "marketing"
+kind = "email"
+product = "OMB"
+promotional = true
+summary = "Email campaign: Ombrexa inhaler technique video."
+content = "OMB-US-CARE"
+
+[[touch]]
+hcp = "hcp-weiss"
+on = "2026-10-05"
+channel = "crm"
+kind = "rep_visit"
+product = "OMB"
+promotional = true
+summary = "Rep visit: Ombrexa once-daily maintenance."
+
+[[touch]]
+hcp = "hcp-sato"
+on = "2026-09-28"
+channel = "contact_centre"
+kind = "call"
+product = "OMB"
+promotional = false
+summary = "Asked about interactions with macrolide antibiotics; follow-up promised."
+
+# Outreach the channels have planned. The platform decides whether each one may go.
+[[planned]]
+id = "plan-kaya-email"
+hcp = "hcp-kaya"
+on = "2026-10-17"
+channel = "marketing"
+kind = "email"
+product = "VEL"
+promotional = true
+summary = "Email campaign: Veltrona dosing reminder."
+content = "VEL-DE-DOSE"
+
+[[planned]]
+id = "plan-brenner-email"
+hcp = "hcp-brenner"
+on = "2026-10-18"
+channel = "marketing"
+kind = "email"
+product = "VEL"
+promotional = true
+summary = "Email campaign: Veltrona renal impairment facts."
+content = "VEL-DE-RENAL"
+
+[[planned]]
+id = "plan-brenner-visit"
+hcp = "hcp-brenner"
+on = "2026-10-21"
+channel = "crm"
+kind = "rep_visit"
+product = "VEL"
+promotional = true
+summary = "Rep visit: Veltrona renal impairment detail aid."
+content = "VEL-DE-RENAL"
+
+[[planned]]
+id = "plan-okafor-visit"
+hcp = "hcp-okafor"
+on = "2026-10-20"
+channel = "crm"
+kind = "rep_visit"
+product = "VEL"
+promotional = true
+summary = "Rep visit: Veltrona adolescent dosing."
+content = "VEL-US-PED"
+
+[[planned]]
+id = "plan-mills-email"
+hcp = "hcp-mills"
+on = "2026-10-19"
+channel = "marketing"
+kind = "email"
+product = "OMB"
+promotional = true
+summary = "Email campaign: Ombrexa once-daily dosing."
+content = "OMB-US-DOSE"
+
+[[planned]]
+id = "plan-ito-email"
+hcp = "hcp-ito"
+on = "2026-10-22"
+channel = "marketing"
+kind = "email"
+product = "VEL"
+promotional = true
+summary = "Email campaign: Veltrona for psoriatic arthritis."
+content = "VEL-JP-PSA"

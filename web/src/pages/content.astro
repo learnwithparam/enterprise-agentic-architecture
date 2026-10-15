@@ -1,0 +1,40 @@
+---
+import Console from '../layouts/Console.astro';
+---
+<Console title="Content" path="/content">
+<section><div class="wrap tight">
+  <div class="head">
+    <div>
+      <h1 class="page">Approved content</h1>
+      <p>The only text the platform may send. Each block passed Medical, Legal and Regulatory review for one product and one country, and is current only between its approval and expiry dates. Withdraw one as the content owner and watch every open draft that used it fail its check.</p>
+    </div>
+  </div>
+  <div id="blocks"><p class="empty">Loading</p></div>
+</div></section>
+</Console>
+<script>
+import { api, esc, block, toast, fail, when } from '../lib/api';
+const el = document.getElementById('blocks')!;
+async function load() {
+  try {
+    const bs = await api('/api/content');
+    el.innerHTML = `<table class="tbl"><thead><tr><th>Block</th><th>For</th><th>Text</th><th>Approval</th><th>Now</th><th></th></tr></thead><tbody>${bs.map((b: any) => `
+      <tr class="${b.current ? '' : 'off'}"><td>${block(b.id, b.version)}<br><span class="muted">${esc(b.topic || b.kind || '')}</span></td>
+      <td>${esc(b.product)}, ${esc(b.country)}</td>
+      <td class="q">${esc(b.text)}</td>
+      <td class="num">${esc(b.mlr_ref)}<br><span class="muted">${esc(b.approved_on || '')} to ${esc(b.expires_on || '')}</span></td>
+      <td>${b.current ? '<span class="chip green">Current</span>' : `<span class="chip red">Not current</span><br><span class="muted">${esc(b.why_not)}</span>`}${b.withdrawn ? `<br><span class="muted">By ${esc(b.withdrawn.by)} ${esc(when(b.withdrawn.at))}</span>` : ''}</td>
+      <td class="act">${b.current ? `<button class="btn sm" data-w="${esc(b.id)}">Withdraw</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+  } catch (e) { fail(el, e); }
+}
+el.addEventListener('click', async (ev) => {
+  const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-w]');
+  if (!b) return;
+  try {
+    const r = await api(`/api/content/${encodeURIComponent(b.dataset.w!)}/withdraw`, { note: 'Label update pending, withdrawn from use' });
+    toast(r.cases.length ? `Withdrawn. Drafts now failing their check: ${r.cases.join(', ')}` : 'Withdrawn. No open draft used it.');
+    load();
+  } catch (e: any) { toast(e.message, 'err'); }
+});
+load();
+</script>

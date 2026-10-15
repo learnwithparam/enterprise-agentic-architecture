@@ -1,0 +1,14 @@
+# Which on-label, fully covered topics may be sent without a human, per country.
+# Anything not listed goes to a medical reviewer. Compliance can switch a country off at
+# runtime (SSM parameter /mi/autonomy/<country>); this file is the starting state.
+# Japan starts with none: the launch plan is four weeks of human approval before any topic is cleared.
+
+[auto_send]
+US = ["dosing", "administration", "missed_dose", "storage", "inhaler_care"]
+DE = ["dosing", "administration", "storage"]
+JP = []
+
+# Spend guard for live model calls, in US dollars, computed from tokens at Haiku 5.5 prices.
+[budget]
+per_case_usd = 0.01
+per_session_usd = 0.10

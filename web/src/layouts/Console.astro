@@ -1,0 +1,55 @@
+---
+import '../styles/base.css';
+import '../styles/console.css';
+import Sprite from '../components/Sprite.astro';
+const { title, path } = Astro.props;
+const NAV = [
+  ['Architecture', '/'],
+  ['Inbox', '/inbox'],
+  ['Review', '/review'],
+  ['HCP 360', '/hcp'],
+  ['Content', '/content'],
+  ['Proof', '/proof'],
+];
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{`${title}, Quillon Medical Information`}</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f7f7f7">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body>
+<Sprite />
+<div class="frame">
+<nav class="top" aria-label="Console">
+  <a class="brand" href="/"><svg class="mark" width="20" height="20" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#171717"/><circle cx="15" cy="15" r="7" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M19 19l5 5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>Quillon MI</a>
+  {NAV.map(([t, h]) => <a href={h} aria-current={path === h ? 'page' : undefined}>{t}</a>)}
+  <span class="grow"></span>
+  <span id="mode" class="chip grey">Replay</span>
+  <label class="who"><span class="vh">Acting as</span><select id="who" aria-label="Acting as"></select></label>
+</nav>
+<main><slot /></main>
+<footer class="foot"><span>Synthetic data. Quillon Biopharma, Veltrona and Ombrexa are invented.</span><span id="today"></span></footer>
+</div>
+<script>
+import { api, setWho, who, esc } from '../lib/api';
+const sel = document.getElementById('who') as HTMLSelectElement;
+const ROLE: Record<string, string> = { medical_reviewer: 'Reviewer', mi_specialist: 'MI specialist', compliance: 'Compliance', pv: 'Pharmacovigilance', content_owner: 'Content owner', field_rep: 'Field rep' };
+Promise.all([api('/api/meta'), api('/api/session')]).then(([m, s]) => {
+  sel.innerHTML = m.people.map((p: any) => `<option value="${esc(p.id)}">${esc(p.name)}, ${esc(ROLE[p.role] || p.role)} ${p.country === 'ALL' ? '' : esc(p.country)}</option>`).join('');
+  sel.value = who();
+  const mode = document.getElementById('mode')!;
+  mode.textContent = s.mode === 'live' ? `Live, ${s.model}` : `Replay, ${s.model}`;
+  mode.className = `chip ${s.mode === 'live' ? 'wait' : 'grey'}`;
+  mode.title = s.mode === 'live' ? 'Agent calls go to the model and are recorded' : 'Agent calls are replayed from recorded runs; tool calls still pass through the guards';
+  document.getElementById('today')!.textContent = `Platform date ${s.today}`;
+});
+sel.addEventListener('change', () => { setWho(sel.value); location.reload(); });
+</script>
+</body>
+</html>

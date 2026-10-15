@@ -1,0 +1,473 @@
+# Synthetic approved content. Each block passed medical, legal and regulatory (MLR) review
+# for one product and one country. A reply may contain only sentences from current blocks.
+# status: approved | withdrawn. A block is current when approved and today is inside its dates.
+
+# Templates used in every reply, whatever the product.
+[[block]]
+id = "TPL-OPEN"
+product = "ALL"
+country = "ALL"
+topic = "template"
+version = 2
+status = "approved"
+approved_on = "2026-01-12"
+expires_on = "2027-12-31"
+mlr_ref = "MLR-2026-0007"
+source = "Medical information response standard, section 2"
+text = "Thank you for your request to Quillon Medical Information."
+
+[[block]]
+id = "TPL-CLOSE"
+product = "ALL"
+country = "ALL"
+topic = "template"
+version = 2
+status = "approved"
+approved_on = "2026-01-12"
+expires_on = "2027-12-31"
+mlr_ref = "MLR-2026-0007"
+source = "Medical information response standard, section 2"
+text = "This response is provided in reply to your unsolicited request and is intended for healthcare professionals only."
+
+[[block]]
+id = "TPL-AI-US"
+product = "ALL"
+country = "US"
+topic = "disclosure"
+version = 1
+status = "approved"
+approved_on = "2026-07-01"
+expires_on = "2027-06-30"
+mlr_ref = "MLR-2026-0311"
+source = "AI use policy, disclosure wording"
+text = "This reply was assembled with AI assistance from approved Quillon content and checked against approval records before sending."
+
+[[block]]
+id = "TPL-AI-DE"
+product = "ALL"
+country = "DE"
+topic = "disclosure"
+version = 1
+status = "approved"
+approved_on = "2026-07-01"
+expires_on = "2027-06-30"
+mlr_ref = "MLR-2026-0312"
+source = "AI use policy, EU AI Act Article 50 wording"
+text = "This reply was assembled with AI assistance from approved Quillon content. You can ask for a medical reviewer at any time."
+
+[[block]]
+id = "TPL-AI-JP"
+product = "ALL"
+country = "JP"
+topic = "disclosure"
+version = 1
+status = "approved"
+approved_on = "2026-07-01"
+expires_on = "2027-06-30"
+mlr_ref = "MLR-2026-0313"
+source = "AI use policy, disclosure wording"
+text = "This reply was assembled with AI assistance from approved Quillon content and reviewed by Quillon Medical Information."
+
+# Veltrona, United States
+[[block]]
+id = "VEL-US-DOSE"
+product = "VEL"
+country = "US"
+topic = "dosing"
+population = "adult"
+version = 4
+status = "approved"
+approved_on = "2026-03-02"
+expires_on = "2027-03-01"
+mlr_ref = "MLR-2026-0102"
+source = "Synthetic prescribing information, section 2.1"
+text = "The recommended dose of Veltrona is 15 mg taken orally once daily. No titration is required when starting treatment."
+
+[[block]]
+id = "VEL-US-PED"
+product = "VEL"
+country = "US"
+topic = "dosing"
+population = "adolescent"
+version = 1
+status = "approved"
+approved_on = "2026-05-18"
+expires_on = "2027-05-17"
+mlr_ref = "MLR-2026-0204"
+source = "Synthetic prescribing information, section 2.2"
+text = "In adolescents aged 12 years and older who weigh at least 40 kg, the recommended dose of Veltrona is 15 mg once daily."
+
+[[block]]
+id = "VEL-US-ADMIN"
+product = "VEL"
+country = "US"
+topic = "administration"
+version = 2
+status = "approved"
+approved_on = "2026-03-02"
+expires_on = "2027-03-01"
+mlr_ref = "MLR-2026-0103"
+source = "Synthetic prescribing information, section 2.3"
+text = "Veltrona tablets can be taken with or without food. Tablets should be swallowed whole and not crushed or split."
+
+[[block]]
+id = "VEL-US-MISS"
+product = "VEL"
+country = "US"
+topic = "missed_dose"
+version = 2
+status = "approved"
+approved_on = "2026-03-02"
+expires_on = "2027-03-01"
+mlr_ref = "MLR-2026-0104"
+source = "Synthetic prescribing information, section 2.4"
+text = "If a dose is missed by less than 12 hours, it should be taken as soon as possible. If more than 12 hours have passed, the missed dose should be skipped and the next dose taken at the usual time."
+
+[[block]]
+id = "VEL-US-STOR"
+product = "VEL"
+country = "US"
+topic = "storage"
+version = 3
+status = "approved"
+approved_on = "2026-03-02"
+expires_on = "2027-03-01"
+mlr_ref = "MLR-2026-0105"
+source = "Synthetic prescribing information, section 16"
+text = "Store Veltrona at 20°C to 25°C in the original blister to protect it from moisture."
+
+[[block]]
+id = "VEL-US-RENAL"
+product = "VEL"
+country = "US"
+topic = "renal_impairment"
+version = 2
+status = "approved"
+approved_on = "2026-03-02"
+expires_on = "2027-03-01"
+mlr_ref = "MLR-2026-0106"
+source = "Synthetic prescribing information, section 8.6"
+text = "No dose adjustment of Veltrona is needed in mild or moderate renal impairment. Veltrona has not been studied in severe renal impairment and is not recommended in that population."
+
+[[block]]
+id = "VEL-US-PREG"
+product = "VEL"
+country = "US"
+topic = "pregnancy"
+version = 2
+status = "approved"
+approved_on = "2026-03-02"
+expires_on = "2027-03-01"
+mlr_ref = "MLR-2026-0107"
+source = "Synthetic prescribing information, section 8.1"
+text = "There are no adequate data on the use of Veltrona in pregnant women. Women who can become pregnant should use effective contraception during treatment and for 4 weeks after the last dose."
+
+[[block]]
+id = "VEL-US-INTER"
+product = "VEL"
+country = "US"
+topic = "interactions"
+version = 3
+status = "approved"
+approved_on = "2026-03-02"
+expires_on = "2027-03-01"
+mlr_ref = "MLR-2026-0108"
+source = "Synthetic prescribing information, section 7"
+text = "Strong CYP3A4 inhibitors increase zelocitinib exposure. Reduce the Veltrona dose to 7.5 mg once daily when it is given with a strong CYP3A4 inhibitor."
+
+[[block]]
+id = "ISI-VEL-US"
+product = "VEL"
+country = "US"
+topic = "safety_information"
+version = 3
+status = "approved"
+approved_on = "2026-03-02"
+expires_on = "2027-03-01"
+mlr_ref = "MLR-2026-0101"
+source = "Synthetic prescribing information, boxed warning summary"
+text = "Important safety information: Veltrona may increase the risk of serious infections. Monitor patients for signs of infection during treatment. See the full prescribing information for all warnings and precautions."
+
+# Veltrona, Germany
+[[block]]
+id = "VEL-DE-DOSE"
+product = "VEL"
+country = "DE"
+topic = "dosing"
+population = "adult"
+version = 3
+status = "approved"
+approved_on = "2026-02-16"
+expires_on = "2027-02-15"
+mlr_ref = "MLR-2026-0121"
+source = "Synthetic SmPC, section 4.2"
+text = "The recommended dose of Veltrona is 15 mg taken orally once daily. No titration is required when starting treatment."
+
+[[block]]
+id = "VEL-DE-ADMIN"
+product = "VEL"
+country = "DE"
+topic = "administration"
+version = 2
+status = "approved"
+approved_on = "2026-02-16"
+expires_on = "2027-02-15"
+mlr_ref = "MLR-2026-0122"
+source = "Synthetic SmPC, section 4.2"
+text = "Veltrona tablets can be taken with or without food. Tablets should be swallowed whole and not crushed or split."
+
+[[block]]
+id = "VEL-DE-STOR"
+product = "VEL"
+country = "DE"
+topic = "storage"
+version = 2
+status = "withdrawn"
+approved_on = "2025-04-01"
+expires_on = "2026-12-31"
+mlr_ref = "MLR-2025-0410"
+source = "Synthetic SmPC, section 6.4 (superseded)"
+text = "Store Veltrona below 30°C."
+
+[[block]]
+id = "VEL-DE-STOR3"
+product = "VEL"
+country = "DE"
+topic = "storage"
+version = 3
+status = "approved"
+approved_on = "2026-02-16"
+expires_on = "2027-02-15"
+mlr_ref = "MLR-2026-0123"
+source = "Synthetic SmPC, section 6.4"
+text = "Do not store Veltrona above 25°C. Keep the tablets in the original blister to protect them from moisture."
+
+[[block]]
+id = "VEL-DE-RENAL"
+product = "VEL"
+country = "DE"
+topic = "renal_impairment"
+version = 1
+status = "approved"
+approved_on = "2026-02-16"
+expires_on = "2027-02-15"
+mlr_ref = "MLR-2026-0124"
+source = "Synthetic SmPC, section 4.2"
+text = "No dose adjustment is required in patients with mild or moderate renal impairment. Veltrona is not recommended in patients with severe renal impairment."
+
+[[block]]
+id = "VEL-DE-PREG"
+product = "VEL"
+country = "DE"
+topic = "pregnancy"
+version = 1
+status = "approved"
+approved_on = "2026-02-16"
+expires_on = "2027-02-15"
+mlr_ref = "MLR-2026-0125"
+source = "Synthetic SmPC, section 4.6"
+text = "Veltrona is not recommended during pregnancy. Women of childbearing potential must use effective contraception during treatment and for 4 weeks after the last dose."
+
+[[block]]
+id = "ISI-VEL-DE"
+product = "VEL"
+country = "DE"
+topic = "safety_information"
+version = 2
+status = "approved"
+approved_on = "2026-02-16"
+expires_on = "2027-02-15"
+mlr_ref = "MLR-2026-0120"
+source = "Synthetic SmPC, section 4.4 summary"
+text = "Important safety information: Veltrona can increase the risk of serious infections. Please refer to the Summary of Product Characteristics for full safety information."
+
+# Veltrona, Japan
+[[block]]
+id = "VEL-JP-DOSE"
+product = "VEL"
+country = "JP"
+topic = "dosing"
+population = "adult"
+version = 2
+status = "approved"
+approved_on = "2026-04-06"
+expires_on = "2027-04-05"
+mlr_ref = "MLR-2026-0141"
+source = "Synthetic package insert, dosage and administration"
+text = "For plaque psoriasis, the usual adult dose of Veltrona is 15 mg taken orally once daily."
+
+[[block]]
+id = "VEL-JP-PSA"
+product = "VEL"
+country = "JP"
+topic = "dosing"
+population = "adult"
+version = 1
+status = "approved"
+approved_on = "2026-04-06"
+expires_on = "2027-04-05"
+mlr_ref = "MLR-2026-0142"
+source = "Synthetic package insert, dosage and administration"
+text = "For psoriatic arthritis, the usual adult dose of Veltrona is 15 mg taken orally once daily."
+
+[[block]]
+id = "VEL-JP-ADMIN"
+product = "VEL"
+country = "JP"
+topic = "administration"
+version = 1
+status = "approved"
+approved_on = "2026-04-06"
+expires_on = "2027-04-05"
+mlr_ref = "MLR-2026-0143"
+source = "Synthetic package insert, precautions for use"
+text = "Veltrona tablets can be taken with or without food."
+
+[[block]]
+id = "ISI-VEL-JP"
+product = "VEL"
+country = "JP"
+topic = "safety_information"
+version = 1
+status = "approved"
+approved_on = "2026-04-06"
+expires_on = "2027-04-05"
+mlr_ref = "MLR-2026-0140"
+source = "Synthetic package insert, warnings"
+text = "Important safety information: serious infections have been reported with Veltrona. Check the package insert for all warnings before prescribing."
+
+# Ombrexa, United States
+[[block]]
+id = "OMB-US-DOSE"
+product = "OMB"
+country = "US"
+topic = "dosing"
+population = "adult"
+version = 2
+status = "approved"
+approved_on = "2026-01-26"
+expires_on = "2027-01-25"
+mlr_ref = "MLR-2026-0151"
+source = "Synthetic prescribing information, section 2"
+text = "The recommended dose of Ombrexa is one inhalation of 200 micrograms once daily, at the same time each day."
+
+[[block]]
+id = "OMB-US-CARE"
+product = "OMB"
+country = "US"
+topic = "inhaler_care"
+version = 1
+status = "approved"
+approved_on = "2026-01-26"
+expires_on = "2027-01-25"
+mlr_ref = "MLR-2026-0152"
+source = "Synthetic instructions for use"
+text = "Clean the mouthpiece of the Ombrexa inhaler once a week with a dry cloth. Do not wash the inhaler or let it get wet."
+
+[[block]]
+id = "OMB-US-INTER"
+product = "OMB"
+country = "US"
+topic = "interactions"
+version = 2
+status = "approved"
+approved_on = "2026-01-26"
+expires_on = "2027-01-25"
+mlr_ref = "MLR-2026-0153"
+source = "Synthetic prescribing information, section 7"
+text = "No clinically relevant interaction with strong CYP3A4 inhibitors was observed in a dedicated study of Ombrexa."
+
+[[block]]
+id = "ISI-OMB-US"
+product = "OMB"
+country = "US"
+topic = "safety_information"
+version = 2
+status = "approved"
+approved_on = "2026-01-26"
+expires_on = "2027-01-25"
+mlr_ref = "MLR-2026-0150"
+source = "Synthetic prescribing information, warnings summary"
+text = "Important safety information: Ombrexa is not for the relief of sudden breathing problems. Patients should use a rescue inhaler for acute symptoms."
+
+# Ombrexa, Germany
+[[block]]
+id = "OMB-DE-DOSE"
+product = "OMB"
+country = "DE"
+topic = "dosing"
+population = "adult"
+version = 1
+status = "approved"
+approved_on = "2026-02-02"
+expires_on = "2027-02-01"
+mlr_ref = "MLR-2026-0161"
+source = "Synthetic SmPC, section 4.2"
+text = "The recommended dose of Ombrexa is one inhalation of 200 micrograms once daily."
+
+[[block]]
+id = "OMB-DE-CARE"
+product = "OMB"
+country = "DE"
+topic = "inhaler_care"
+version = 1
+status = "approved"
+approved_on = "2026-02-02"
+expires_on = "2027-02-01"
+mlr_ref = "MLR-2026-0162"
+source = "Synthetic package leaflet, section 3"
+text = "Wipe the mouthpiece of the Ombrexa inhaler with a dry cloth once a week. Never use water to clean the inhaler."
+
+[[block]]
+id = "ISI-OMB-DE"
+product = "OMB"
+country = "DE"
+topic = "safety_information"
+version = 1
+status = "approved"
+approved_on = "2026-02-02"
+expires_on = "2027-02-01"
+mlr_ref = "MLR-2026-0160"
+source = "Synthetic SmPC, section 4.4 summary"
+text = "Important safety information: Ombrexa is not indicated for acute episodes of bronchospasm. Please refer to the Summary of Product Characteristics for full safety information."
+
+# Ombrexa, Japan
+[[block]]
+id = "OMB-JP-DOSE"
+product = "OMB"
+country = "JP"
+topic = "dosing"
+population = "adult"
+version = 1
+status = "approved"
+approved_on = "2026-03-09"
+expires_on = "2027-03-08"
+mlr_ref = "MLR-2026-0171"
+source = "Synthetic package insert, dosage and administration"
+text = "The usual adult dose of Ombrexa is one inhalation of 200 micrograms once daily."
+
+[[block]]
+id = "OMB-JP-INTER"
+product = "OMB"
+country = "JP"
+topic = "interactions"
+version = 1
+status = "approved"
+approved_on = "2025-10-01"
+expires_on = "2026-09-30"
+mlr_ref = "MLR-2025-0915"
+source = "Synthetic package insert, interactions"
+text = "No dose adjustment of Ombrexa is needed with strong CYP3A4 inhibitors."
+
+[[block]]
+id = "ISI-OMB-JP"
+product = "OMB"
+country = "JP"
+topic = "safety_information"
+version = 1
+status = "approved"
+approved_on = "2026-03-09"
+expires_on = "2027-03-08"
+mlr_ref = "MLR-2026-0170"
+source = "Synthetic package insert, warnings"
+text = "Important safety information: Ombrexa is not for acute symptoms. Check the package insert for all warnings before prescribing."

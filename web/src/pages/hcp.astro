@@ -1,0 +1,41 @@
+---
+import Console from '../layouts/Console.astro';
+---
+<Console title="HCP 360" path="/hcp">
+<section><div class="wrap tight">
+  <div class="head">
+    <div>
+      <h1 class="page">HCP 360</h1>
+      <p>One record per doctor, joined across the CRM, marketing automation, the contact centre and the portal. Every planned touch is checked against consent, the country's promotional cap, open medical cases and content currency before it goes out.</p>
+    </div>
+  </div>
+  <div class="people" id="people"><p class="empty">Loading</p></div>
+</div></section>
+<section><div class="wrap tight" id="detail"></div></section>
+</Console>
+<script>
+import { api, esc, channel, block, when, fail } from '../lib/api';
+const sel = new URLSearchParams(location.search).get('id') || 'hcp-kaya';
+const people = document.getElementById('people')!;
+try {
+  const hs = await api('/api/hcps');
+  people.innerHTML = hs.map((h: any) => `<a class="person" href="/hcp?id=${encodeURIComponent(h.id)}"${h.id === sel ? ' aria-current="true"' : ''}><b>${esc(h.name)}</b><small>${esc(h.specialty)}, ${esc(h.country)}</small><span class="row"><span class="chip grey num">${h.touches} touch${h.touches === 1 ? '' : 'es'}</span>${h.open_cases ? `<span class="chip wait">${h.open_cases} open case${h.open_cases > 1 ? 's' : ''}</span>` : ''}${h.held ? `<span class="chip red">${h.held} held</span>` : ''}</span></a>`).join('');
+  const v = await api(`/api/hcps/${encodeURIComponent(sel)}`);
+  const h = v.hcp;
+  const consent = Object.entries(h.consent).map(([k, ok]) => `<span class="chip ${ok ? 'green' : 'red'}">${esc(k.replaceAll('_', ' '))} ${ok ? 'yes' : 'no'}</span>`).join(' ');
+  const recs = Object.entries(h.records).map(([k, r]) => `<span>${esc(k.replaceAll('_', ' '))} <b class="num">${esc(r)}</b></span>`).join('');
+  document.getElementById('detail')!.innerHTML = `
+    <div class="head"><div><h2 class="sec">${esc(h.name)}</h2><p>${esc(h.specialty)}, ${esc(h.city)}. Registry id <span class="num">${esc(h.registry_id)}</span>.</p></div><div class="row">${consent}</div></div>
+    <div class="meta">${recs}</div><br>
+    <div class="two">
+      <div><h2 class="sec">Planned touches</h2><p class="sub">What other teams want to send next, and whether the platform lets it go.</p>
+        ${v.planned.length ? v.planned.map((p: any) => `<div class="go ${p.decision.go ? 'yes' : 'no'}"><div class="row"><b class="num">${esc(p.on)}</b>${channel(p.channel)}${p.content ? block(p.content) : ''}<span class="chip ${p.decision.go ? 'green' : 'red'}">${p.decision.go ? 'Goes out' : 'Held'}</span></div><p>${esc(p.summary)}</p>${p.decision.reasons.length ? `<ul>${p.decision.reasons.map((r: string) => `<li>${esc(r)}</li>`).join('')}</ul>` : ''}</div>`).join('') : '<p class="empty">Nothing planned.</p>'}
+        <h2 class="sec gap">Open medical cases</h2>
+        ${v.open_cases.length ? v.open_cases.map((c: any) => `<p><a href="/case?id=${encodeURIComponent(c.id)}">${esc(c.id)}</a> <span class="muted">${esc(c.product)}, ${esc(c.status.replaceAll('_', ' '))}</span></p>`).join('') : '<p class="empty">None.</p>'}
+      </div>
+      <div><h2 class="sec">Timeline</h2><p class="sub">Every touch from every channel, newest first. Promotional touches count toward the cap.</p>
+        <ol class="tl">${v.timeline.map((t: any) => `<li><time>${esc(when(t.on))}</time><span><span class="row">${channel(t.channel)}${t.promotional ? '<span class="chip grey">Promotional</span>' : ''}${t.content ? block(t.content) : ''}</span>${esc(t.summary)}${t.case ? ` <a href="/case?id=${encodeURIComponent(t.case)}">Open case</a>` : ''}</span></li>`).join('') || '<li><span></span><span class="muted">No touches yet.</span></li>'}</ol>
+      </div>
+    </div>`;
+} catch (e) { fail(people, e); }
+</script>

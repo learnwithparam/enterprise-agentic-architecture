@@ -1,0 +1,79 @@
+---
+import Console from '../layouts/Console.astro';
+---
+<Console title="Inbox" path="/inbox">
+<section><div class="wrap tight">
+  <div class="head">
+    <div>
+      <h1 class="page">Inbox</h1>
+      <p>Unsolicited questions from doctors, as they arrive from the portal, email, the chatbot, the contact centre and field reps. Run one to watch the graph decide where it goes, then open the case to see why.</p>
+    </div>
+    <div class="btns"><button class="btn dark" id="all">Run every inquiry</button></div>
+  </div>
+  <div id="list"><p class="empty">Loading</p></div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">Ask a new question</h2>
+  <p class="sub">A typed question has no recorded run, so it calls the model. The server refuses unless it was started with LIVE=1, and every live run is capped at one cent.</p>
+  <form class="form" id="ask">
+    <div class="fld"><label for="hcp">From</label><select id="hcp" name="hcp"></select></div>
+    <div class="fld"><label for="ch">Channel</label><select id="ch" name="channel"><option value="portal">HCP portal</option><option value="email">Email</option><option value="chatbot">Chatbot</option></select></div>
+    <div class="fld w"><label for="text">Question</label><textarea id="text" name="text" required maxlength="2000">Is Veltrona safe to use in children under 12?</textarea></div>
+    <div class="fld w"><button class="btn dark send" type="submit">Run this question</button></div>
+  </form>
+</div></section>
+</Console>
+<script>
+import { api, esc, routeChip, channel, STATUS, toast, fail, when } from '../lib/api';
+const list = document.getElementById('list')!;
+
+async function load() {
+  try {
+    const rows = await api('/api/inquiries');
+    list.innerHTML = `<table class="tbl"><thead><tr><th>Received</th><th>From</th><th>Message</th><th>Where it went</th><th></th></tr></thead><tbody>${rows.map((r: any) => `
+      <tr class="${r.eval_only ? 'off' : ''}">
+        <td class="num">${esc(when(r.received))}<br>${channel(r.channel)}</td>
+        <td>${esc(r.from || 'Unknown sender')}<br><span class="muted">${esc(r.country || '')}${r.submitted_by ? ', via field rep' : ''}</span></td>
+        <td class="q">${r.text === null ? '<span class="muted">Hidden from field reps. Only Medical sees inquiry text.</span>' : esc(r.text)}</td>
+        <td>${r.case ? `${routeChip(r.case.route)}<br><span class="muted">${esc(STATUS[r.case.status] || r.case.status)}</span>` : '<span class="muted">Not run yet</span>'}</td>
+        <td class="act">${r.case ? `<a class="btn sm" href="/case?id=${encodeURIComponent(r.id)}">Open case</a>` : `<button class="btn sm" data-run="${esc(r.id)}">Run</button>`}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { fail(list, e); }
+}
+
+list.addEventListener('click', async (ev) => {
+  const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-run]');
+  if (!b) return;
+  b.disabled = true; b.textContent = 'Running';
+  try {
+    await api(`/api/inquiries/${b.dataset.run}/run`, {});
+    location.href = `/case?id=${encodeURIComponent(b.dataset.run!)}`;
+  } catch (e: any) { toast(e.message, 'err'); b.disabled = false; b.textContent = 'Run'; }
+});
+
+document.getElementById('all')!.addEventListener('click', async (ev) => {
+  const b = ev.currentTarget as HTMLButtonElement;
+  b.disabled = true;
+  const rows = await api('/api/inquiries');
+  let n = 0;
+  for (const r of rows.filter((r: any) => !r.eval_only)) {
+    b.textContent = `Running ${++n} of ${rows.filter((r: any) => !r.eval_only).length}`;
+    try { await api(`/api/inquiries/${r.id}/run`, {}); } catch (e: any) { toast(`${r.id}: ${e.message}`, 'err'); }
+  }
+  b.disabled = false; b.textContent = 'Run every inquiry';
+  load();
+});
+
+const hcps = await api('/api/hcps');
+(document.getElementById('hcp') as HTMLSelectElement).innerHTML = hcps.map((h: any) => `<option value="${esc(h.id)}">${esc(h.name)}, ${esc(h.country)}</option>`).join('');
+document.getElementById('ask')!.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = new FormData(ev.target as HTMLFormElement);
+  try {
+    const d = await api('/api/inquiries', Object.fromEntries(f));
+    location.href = `/case?id=${encodeURIComponent(d.id)}`;
+  } catch (e: any) { toast(e.message, 'err'); }
+});
+load();
+</script>

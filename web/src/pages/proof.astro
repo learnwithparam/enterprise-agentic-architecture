@@ -1,0 +1,86 @@
+---
+import Console from '../layouts/Console.astro';
+---
+<Console title="Proof" path="/proof">
+<section><div class="wrap tight">
+  <div class="head">
+    <div>
+      <h1 class="page">Proof for Compliance</h1>
+      <p>What a compliance officer checks before trusting the platform, and the switches they hold. Ledger checks and the kill switch are allowed only for Compliance; try them as another persona and Cedar says no.</p>
+    </div>
+  </div>
+  <div class="kpis" id="kpis"><p class="empty">Loading</p></div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">The audit ledger</h2>
+  <p class="sub">Change one past entry and the chain breaks at that point. Restore it and the chain verifies again. Deleting the archived copy fails because S3 Object Lock in compliance mode refuses it, even for the account owner.</p>
+  <div class="card" id="ledgercard"></div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">Automatic replies per country</h2>
+  <p class="sub">The kill switch. Turning a country off sends every new reply there to a medical reviewer; nothing else changes.</p>
+  <div class="card" id="autonomy"></div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">Release gate</h2>
+  <p class="sub">Every inquiry, including eight that never reach the inbox, runs through the graph before a change ships. The gate fails on one missed adverse event, one ungrounded sentence or one call to any model but Haiku 5.5.</p>
+  <div id="evals"></div>
+</div></section>
+
+<section><div class="wrap tight">
+  <h2 class="sec">Operations</h2>
+  <p class="sub">Route counts from CloudWatch metrics since Floci started, and the messages waiting in each handoff queue. Nothing consumes the queues in the prototype; in production they feed the safety database and the review tool.</p>
+  <div class="two" id="ops"></div>
+</div></section>
+</Console>
+<script>
+import { api, esc, routeChip, usd, short, toast, fail } from '../lib/api';
+
+async function load() {
+  let p: any;
+  try { p = await api('/api/proof'); } catch (e) { fail(document.getElementById('kpis')!, e); return; }
+  const m = p.evals?.metrics || {};
+  const kpi = (v: string, l: string, ok: boolean) => `<div class="kpi ${ok ? 'ok' : 'bad'}"><b>${v}</b><span>${l}</span></div>`;
+  document.getElementById('kpis')!.innerHTML = [
+    kpi(p.ledger.ok ? 'Intact' : `Broken at ${p.ledger.broken_at}`, `Ledger, ${p.ledger.entries} entries, ${p.ledger.checkpoints ?? 'no'} signed checkpoints`, p.ledger.ok),
+    kpi(m.ae_recall === undefined ? 'Not run' : `${Math.round(m.ae_recall * 100)}%`, 'Adverse events caught in the eval set', m.ae_recall === 1),
+    kpi(String(m.ungrounded_sentences ?? 'Not run'), 'Sentences without a current approved source', m.ungrounded_sentences === 0),
+    kpi(usd(p.spend.cost_usd), `Model spend for ${p.spend.cases} cases, ${p.spend.live_cases} live`, true),
+  ].join('');
+
+  const v = p.ledger;
+  document.getElementById('ledgercard')!.innerHTML = `<div class="call"><header><h4>${v.ok ? 'Every hash matches its entry and its predecessor' : `Entry ${v.broken_at} no longer matches its hash`}</h4>${v.head ? `<span class="hash">Head ${short(v.head)}</span>` : ''}</header>${v.ok ? '' : `<p class="empty err">${esc(v.reason || 'The chain is broken')}</p>`}<div class="btns"><button class="btn" data-a="tamper">Change a past entry</button><button class="btn" data-a="restore">Restore from the archive</button><button class="btn" data-a="delete-archive">Try to delete the archive</button></div>
+    <table class="tbl chain"><thead><tr><th>Seq</th><th>Case</th><th>Entry</th><th>Hash</th></tr></thead><tbody>${p.recent.slice(0, 12).map((r: any) => `<tr><td class="num">${r.seq}</td><td class="num">${esc(r.entry.case || '')}</td><td class="ty">${esc(r.entry.type.replaceAll('_', ' '))}${r.entry.route ? ` ${routeChip(r.entry.route)}` : ''}</td><td class="hash">${short(r.hash)}${r.signature ? ' <span class="chip green">Signed</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+
+  const auto = await api('/api/autonomy');
+  document.getElementById('autonomy')!.innerHTML = `<div class="call">${Object.entries(auto).map(([c, s]: [string, any]) => `<div class="switch"><div><b>${esc(c)}</b> <span class="chip ${s.enabled ? 'green' : 'red'}">${s.enabled ? 'On' : 'Off'}</span><br><span class="muted">${s.topics.length ? `Cleared topics: ${esc(s.topics.join(', ').replaceAll('_', ' '))}` : 'No topic is cleared, so every draft goes to review'}</span></div><button class="btn sm" data-c="${esc(c)}" data-on="${s.enabled ? '0' : '1'}">${s.enabled ? 'Turn off' : 'Turn on'}</button></div>`).join('')}</div>`;
+
+  const ev = p.evals;
+  document.getElementById('evals')!.innerHTML = ev ? `<p class="row"><span class="chip ${ev.passed ? 'green' : 'red'}">${ev.passed ? 'Gate passed' : 'Gate failed'}</span><span class="muted">${esc(ev.model)}, prompt ${esc(ev.prompt_version)}, ${m.cases} cases, at most ${usd(m.max_cost_per_case_usd)} per case</span></p><br>
+    <table class="tbl"><thead><tr><th>Inquiry</th><th>Expected</th><th>Got</th><th>Why it should go there</th></tr></thead><tbody>${ev.cases.map((c: any) => `<tr><td class="num"><a href="/case?id=${encodeURIComponent(c.id)}">${esc(c.id)}</a></td><td>${routeChip(c.expect)}</td><td>${routeChip(c.route)}${!c.acceptable ? ' <span class="chip red">Wrong</span>' : c.route !== c.expect ? ' <span class="chip grey">Also safe</span>' : ''}</td><td class="q">${esc(c.why)}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">No eval report yet. Run make evals.</p>';
+
+  const routes = Object.entries(p.routes).sort((a: any, b: any) => b[1] - a[1]);
+  document.getElementById('ops')!.innerHTML = `<div><h3>Routes</h3><ol class="tl">${routes.map(([r, n]) => `<li><time class="num">${n}</time><span>${routeChip(r)}</span></li>`).join('')}</ol></div><div><h3>Handoff queues</h3><ol class="tl">${Object.entries(p.queues).map(([q, n]) => `<li><time class="num">${n}</time><span>${esc(q)}</span></li>`).join('')}</ol></div>`;
+}
+
+document.querySelector('main')!.addEventListener('click', async (ev) => {
+  const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-a],[data-c]');
+  if (!b) return;
+  try {
+    if (b.dataset.c) {
+      await api('/api/autonomy', { country: b.dataset.c, enabled: b.dataset.on === '1' });
+      toast(`Automatic replies ${b.dataset.on === '1' ? 'on' : 'off'} for ${b.dataset.c}`);
+    } else {
+      const r = await api(`/api/proof/${b.dataset.a}`, {});
+      if (b.dataset.a === 'tamper') toast(`Entry ${r.tampered.seq} changed. Verify now fails at ${r.verify.broken_at}.`, 'err');
+      else if (b.dataset.a === 'restore') toast(r.ok ? 'Restored from the archive. The chain verifies.' : 'Still broken');
+      else toast(r.deleted ? 'Deleted, which should never happen' : `Refused: ${r.error}`, r.deleted ? 'err' : 'ok');
+    }
+  } catch (e: any) { toast(e.message, 'err'); }
+  load();
+});
+load();
+</script>

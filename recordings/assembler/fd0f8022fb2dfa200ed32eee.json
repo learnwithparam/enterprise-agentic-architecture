@@ -1,0 +1,48 @@
+{
+ "output": {
+  "answers": [
+   {
+    "question": "What is the usual daily dose of Veltrona for adult plaque psoriasis?",
+    "block_ids": [
+     "VEL-US-DOSE"
+    ]
+   }
+  ],
+  "uncovered": []
+ },
+ "tool_calls": [
+  {
+   "tool": "mcp__mi__search_approved_content",
+   "input": {
+    "product": "VEL",
+    "country": "US",
+    "topic": "dosing"
+   },
+   "allowed": true,
+   "reason": "Verified Permissions: ALLOW (agents.cedar)",
+   "returned": [
+    "VEL-US-DOSE",
+    "VEL-US-PED"
+   ]
+  }
+ ],
+ "usage": {
+  "input_tokens": 4,
+  "output_tokens": 707,
+  "cache_read_input_tokens": 2641,
+  "cache_creation_input_tokens": 1132
+ },
+ "model_usage": {
+  "claude-haiku-5-5": {
+   "inputTokens": 4,
+   "outputTokens": 707
+  }
+ },
+ "cost_usd": 0.000607,
+ "agent": "assembler",
+ "key": "fd0f8022fb2dfa200ed32eee",
+ "prompt_version": "2026-10-15.1",
+ "model": "claude-haiku-5-5",
+ "user_prompt": "{\"product\": \"VEL\", \"country\": \"US\", \"questions\": [{\"text\": \"What is the usual daily dose of Veltrona for adult plaque psoriasis?\", \"topic\": \"dosing\"}]}",
+ "recorded_at": "2026-10-15T18:01:33+00:00"
+}

@@ -1,0 +1,51 @@
+# The people who use the platform. Seeded into Cognito; their role and country feed every
+# Cedar decision in Verified Permissions.
+
+[[user]]
+id = "u-brandt"
+name = "Dr. Lena Brandt"
+role = "medical_reviewer"
+country = "DE"
+title = "Medical reviewer, Germany"
+
+[[user]]
+id = "u-hale"
+name = "Dr. Marcus Hale"
+role = "medical_reviewer"
+country = "US"
+title = "Medical reviewer, United States"
+
+[[user]]
+id = "u-tanaka"
+name = "Aiko Tanaka"
+role = "mi_specialist"
+country = "JP"
+title = "Medical information specialist, Japan"
+
+[[user]]
+id = "u-raman"
+name = "Priya Raman"
+role = "compliance"
+country = "ALL"
+title = "Compliance officer, global"
+
+[[user]]
+id = "u-lind"
+name = "Sara Lind"
+role = "pv"
+country = "ALL"
+title = "Pharmacovigilance specialist"
+
+[[user]]
+id = "u-weber"
+name = "Jonas Weber"
+role = "content_owner"
+country = "ALL"
+title = "Content owner, medical communications"
+
+[[user]]
+id = "u-becker"
+name = "Tom Becker"
+role = "field_rep"
+country = "DE"
+title = "Field representative, Germany"

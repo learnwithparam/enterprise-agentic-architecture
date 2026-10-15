@@ -1,0 +1,33 @@
+---
+import Console from '../layouts/Console.astro';
+---
+<Console title="Review" path="/review">
+<section><div class="wrap tight">
+  <div class="head">
+    <div>
+      <h1 class="page">Review bench</h1>
+      <p>Every case the AI did not finish on its own, grouped by who owns it. Drafts wait for a medical reviewer in the same country. Cases with no draft are owned by a team that works without AI.</p>
+    </div>
+  </div>
+  <div id="queues"><p class="empty">Loading</p></div>
+</div></section>
+</Console>
+<script>
+import { api, esc, routeChip, STATUS, fail } from '../lib/api';
+const el = document.getElementById('queues')!;
+const GROUPS: [string, string, string[]][] = [
+  ['Drafts awaiting a medical reviewer', 'A human in the loop approves or rejects. Approval re-checks every sentence against content as it is now.', ['awaiting_review', 'blocked_at_send']],
+  ['With pharmacovigilance', 'Possible adverse events and special situations. No AI text exists for these.', ['with_pharmacovigilance']],
+  ['With Medical and specialists', 'Off-label questions, unverified senders and unknown products. Written by hand.', ['with_medical', 'with_specialist']],
+  ['Closed', 'Sent, declined or rejected.', ['sent', 'declined', 'rejected']],
+];
+try {
+  const cases = await api('/api/cases');
+  if (!cases.length) el.innerHTML = '<p class="empty">No cases yet. Run inquiries from the inbox.</p>';
+  else el.innerHTML = GROUPS.map(([t, s, st]) => {
+    const rows = cases.filter((c: any) => st.includes(c.status));
+    if (!rows.length) return '';
+    return `<h2 class="sec">${esc(t)} <span class="muted num">${rows.length}</span></h2><p class="sub">${esc(s)}</p><table class="tbl"><thead><tr><th>Case</th><th>Country</th><th>Route</th><th>Status</th><th>Why</th><th></th></tr></thead><tbody>${rows.map((c: any) => `<tr><td class="num">${esc(c.id)}</td><td>${esc(c.country)}</td><td>${routeChip(c.route)}</td><td>${esc(STATUS[c.status] || c.status)}</td><td class="q">${c.redacted ? `<span class="muted">${esc(c.redacted)}</span>` : esc(c.decision?.why)}</td><td class="act"><a class="btn sm" href="/case?id=${encodeURIComponent(c.id)}">Open</a></td></tr>`).join('')}</tbody></table><br><br>`;
+  }).join('');
+} catch (e) { fail(el, e); }
+</script>

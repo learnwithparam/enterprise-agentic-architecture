@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+web/dist/
+web/.astro/
+*.log
+# A scratch Claude config dir created by mistake while testing isolation. Never commit it.
+/$S/
