@@ -6,8 +6,8 @@ uv run uvicorn hcpagents.api:app --port 8765
 import json
 from functools import cache
 
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -26,13 +26,26 @@ def _pool() -> str:
 
 def user(x_user: str | None) -> dict:
     """The acting user, read from Cognito. Production takes this from a verified JWT instead of a header."""
+    if not x_user:
+        raise HTTPException(401, "Name the acting user in the X-User header")
     try:
-        u = client("cognito-idp").admin_get_user(UserPoolId=_pool(), Username=x_user or "u-raman")
+        u = client("cognito-idp").admin_get_user(UserPoolId=_pool(), Username=x_user)
     except Exception as e:
         raise HTTPException(401, "Unknown user") from e
     a = {x["Name"]: x["Value"] for x in u["UserAttributes"]}
     p = world.person(u["Username"])
     return {"id": u["Username"], "name": a["name"], "role": a["custom:role"], "country": a["custom:country"], "title": p["title"]}
+
+
+@app.middleware("http")
+async def known_user_on_every_api_call(request: Request, call_next):
+    """No /api route answers without a user Cognito knows, so a missing header never falls back to anyone."""
+    if request.url.path.startswith("/api/"):
+        try:
+            user(request.headers.get("x-user"))
+        except HTTPException as e:
+            return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+    return await call_next(request)
 
 
 def _denied(e: cases.Denied):
@@ -68,7 +81,9 @@ def inquiries(x_user: str | None = Header(None)):
             continue
         h = world.hcp(i.get("hcp"))
         c = done.get(i["id"])
-        out.append({"id": i["id"], "channel": i["channel"], "received": i["received"], "text": i["text"] if u["role"] != "field_rep" or i.get("submitted_by") else None,
+        submitter = (i.get("submitted_by") or "").split(",")[0]
+        can_read, _ = authz.user_can(u, "ViewInquiryText", "Inquiry", i["id"], {"submitter": submitter})
+        out.append({"id": i["id"], "channel": i["channel"], "received": i["received"], "text": i["text"] if can_read else None,
                     "from": h["name"] if h else i.get("sender"), "country": h["country"] if h else i.get("country"),
                     "submitted_by": i.get("submitted_by"), "eval_only": not i.get("inbox"),
                     "case": c and {"route": c["route"], "status": c["status"], "product": c["product"]}})
@@ -261,7 +276,11 @@ def architecture():
 
 
 @app.post("/api/reset")
-def reset():
+def reset(x_user: str | None = Header(None)):
+    u = user(x_user)
+    ok, why = authz.user_can(u, "ResetDemo", "Ledger", "main", {})
+    if not ok:
+        raise HTTPException(403, f"{u['name']} may not reset the platform. {why}")
     infra.provision(reset=True)
     authz._store.cache_clear()
     authz._policy_file.cache_clear()

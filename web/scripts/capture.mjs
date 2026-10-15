@@ -41,6 +41,7 @@ export const screens = [
   { name: 'approve-blocked', at: '/case?id=inq-103', as: 'u-brandt', act: async (page) => {
     await click('Approve and send')(page);
     await page.locator('.staple li.bad').first().waitFor();
+    await page.waitForLoadState('networkidle');
     await page.locator('.staple').scrollIntoViewIfNeeded();
   } },
   { name: 'wrong-country-reviewer', at: '/case?id=inq-112', as: 'u-hale', act: async (page) => {

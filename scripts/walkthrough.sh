@@ -20,9 +20,9 @@ uv run python -m hcpagents.infra --reset
 uv run uvicorn hcpagents.api:app --port 8765 > "$work/serve.log" 2>&1 &
 server=$!
 trap 'kill "$server" 2> /dev/null || true; wait "$server" 2> /dev/null || true' EXIT
-for _ in $(seq 1 60); do curl -sf -o /dev/null localhost:8765/api/meta && break; sleep 1; done
-for id in $(curl -sf localhost:8765/api/inquiries | uv run python -c "import json,sys; print(' '.join(i['id'] for i in json.load(sys.stdin)))"); do
-  curl -sf -o /dev/null -X POST "localhost:8765/api/inquiries/$id/run"
+for _ in $(seq 1 60); do curl -sf -o /dev/null -H "X-User: u-raman" localhost:8765/api/meta && break; sleep 1; done
+for id in $(curl -sf -H "X-User: u-raman" localhost:8765/api/inquiries | uv run python -c "import json,sys; print(' '.join(i['id'] for i in json.load(sys.stdin)))"); do
+  curl -sf -o /dev/null -H "X-User: u-raman" -X POST "localhost:8765/api/inquiries/$id/run"
 done
 
 node web/scripts/capture.mjs "$work/shots"

@@ -97,3 +97,26 @@ def test_api_refuses_approval_with_403_and_reason():
     run("inq-103")
     r = TestClient(api.app).post("/api/cases/inq-103/approve", headers={"X-User": "u-hale"})
     assert r.status_code == 403 and "Verified Permissions" in r.json()["detail"]
+
+
+def test_every_api_route_refuses_a_caller_cognito_does_not_know():
+    c = TestClient(api.app)
+    routes = [(m, r.path) for r in api.app.routes if getattr(r, "path", "").startswith("/api/") for m in r.methods]
+    assert len(routes) > 20
+    for method, route in routes:
+        url = route.replace("{", "").replace("}", "")
+        for headers in ({}, {"X-User": "u-nobody"}):
+            r = c.request(method, url, headers=headers, json={})
+            assert r.status_code == 401, (method, route, headers, r.status_code)
+
+
+def test_field_rep_reads_only_the_inquiries_they_submitted():
+    rows = {i["id"]: i for i in TestClient(api.app).get("/api/inquiries", headers={"X-User": "u-becker"}).json()}
+    assert rows["inq-102"]["text"]
+    assert rows["inq-111"]["text"] is None
+    assert rows["inq-103"]["text"] is None
+
+
+def test_only_compliance_resets_the_platform():
+    r = TestClient(api.app).post("/api/reset", headers={"X-User": "u-becker"})
+    assert r.status_code == 403 and "Verified Permissions" in r.json()["detail"]

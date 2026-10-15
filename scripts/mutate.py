@@ -33,6 +33,16 @@ MUTANTS = [
     ("Nobody approves on a pharmacovigilance case", "policies/cedar/reviewers.cedar",
      'when { resource.route == "pv" };', 'when { resource.route == "never" };',
      [*PYTEST, "tests/test_flow.py::test_nobody_approves_on_a_pharmacovigilance_case"]),
+    ("A field rep reads only the inquiries they submitted", "policies/cedar/cases.cedar",
+     'principal.role != "field_rep" || resource.submitter == principal.name', 'principal.role != "field_rep" || resource.submitter != ""',
+     [*PYTEST, "tests/test_flow.py::test_field_rep_reads_only_the_inquiries_they_submitted"]),
+    ("A missing user never falls back to anyone", "src/hcpagents/api.py",
+     '    if not x_user:\n        raise HTTPException(401, "Name the acting user in the X-User header")\n',
+     '    x_user = x_user or "u-raman"\n',
+     [*PYTEST, "tests/test_flow.py::test_every_api_route_refuses_a_caller_cognito_does_not_know"]),
+    ("Every API route needs a known user", "src/hcpagents/api.py",
+     'if request.url.path.startswith("/api/"):', 'if request.url.path.startswith("/none/"):',
+     [*PYTEST, "tests/test_flow.py::test_every_api_route_refuses_a_caller_cognito_does_not_know"]),
 ]
 
 
