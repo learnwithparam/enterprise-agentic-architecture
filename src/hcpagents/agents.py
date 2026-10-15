@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import json
 import os
+import sys
 from datetime import UTC, datetime
 
 from hcpagents import world
@@ -264,8 +265,15 @@ def _options(agent: str, case: dict, store: dict, authorize, audit, tool_calls: 
         },
         # Backstop only. The CLI misprices this model, so the real cap is Spend above.
         max_budget_usd=0.5,
+        stderr=_cli_stderr,
         **kw,
     )
+
+
+def _cli_stderr(line: str) -> None:
+    # The bundled CLI has no price for this model and says so on every call; Spend prices it instead.
+    if "unrecognized_model" not in line:
+        print(line, file=sys.stderr)
 
 
 async def _live(agent: str, user_prompt: str, case: dict, store: dict, authorize, audit) -> dict:
