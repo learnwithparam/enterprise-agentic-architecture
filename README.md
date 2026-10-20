@@ -45,6 +45,9 @@ Model calls replay from `recordings/` by default, so all of the above is free an
 
 ## Read it
 
+The four sessions teach the build. These pages are the reading around it, and a PM starts with the
+case study and the delivery plan.
+
 - [Case study](docs/case-study.md): the platform, agentic AI in a regulated setting, the delivery plan, and
   why this slice.
 - [Architecture walkthrough](docs/architecture-walkthrough.md): each part, and the three flows Compliance
