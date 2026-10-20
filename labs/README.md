@@ -1,4 +1,4 @@
-# Labs
+# Labs for project 1 of the Agentic AI Buildcamp
 
 Each lab is one property of the platform, a short README with the job it does for Quillon's medical
 information service, and a test that proves it. Each README ends with a change that breaks the property, so

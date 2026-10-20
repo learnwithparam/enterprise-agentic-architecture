@@ -1,4 +1,14 @@
-# Enterprise agentic AI architecture
+# Build a regulated AI inquiry workflow
+
+Project 1 of the Agentic AI Buildcamp for Engineers & PMs. Four 10-minute sessions, each with a lab you run
+and a test that proves the property.
+
+| Session | What you build | Labs |
+|---|---|---|
+| 1. Design a Regulated AI Workflow | The outcome, the metric and the must nevers, then a routing table with safety first | [Route inquiries](labs/route-inquiries-with-a-routing-table/) |
+| 2. Build Grounded Agent Replies | Pinned agents that select approved block ids, and a check on every sentence | [Ground replies](labs/ground-replies-with-approved-blocks/), [Pin the model](labs/pin-the-model-with-agent-sdk-options/) |
+| 3. Secure Agent Tool Calls with Cedar | A Cedar check on every tool call, and an audit trail nobody can edit | [Guard tool calls](labs/guard-tool-calls-with-cedar/), [Hash chain](labs/prove-the-audit-trail-with-a-hash-chain/) |
+| 4. Prove Every Release with an Eval Gate | Twenty eval cases, a gate that fails on one missed adverse event, and mutants | [Gate releases](labs/gate-releases-with-evals/) |
 
 **The job:** answer doctors' product questions for a pharmaceutical company in minutes instead of days,
 without ever sending a sentence that Compliance cannot trace to current, approved content, and without

@@ -4,7 +4,7 @@ Status: accepted, 15 October 2026
 
 ## Context
 
-The workshop and the client demo must run on a laptop with one command and no cloud account, and the
+The buildcamp project must run on a laptop with one command and no cloud account, and the
 code must be the code that runs on AWS. Mocks diverge from the service; a shared dev account costs money and
 needs credentials.
 

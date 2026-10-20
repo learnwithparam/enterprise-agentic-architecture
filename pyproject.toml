@@ -1,7 +1,7 @@
 [project]
 name = "hcpagents"
 version = "0.1.0"
-description = "Medical information slice of a compliant AI platform for HCP engagement: agents on Claude Haiku 5.5, local AWS on Floci"
+description = "Agentic AI Buildcamp project 1, a regulated AI inquiry workflow: agents on Claude Haiku 5.5, local AWS on Floci"
 readme = "README.md"
 authors = [
     { name = "Param Harrison", email = "param@learnwithparam.com" }
