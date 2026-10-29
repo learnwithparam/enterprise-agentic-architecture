@@ -1,0 +1,72 @@
+{
+ "output": {
+  "answers": [
+   {
+    "question": "How many inhalations of Ombrexa per day?",
+    "block_ids": [
+     "OMB-US-DOSE"
+    ]
+   },
+   {
+    "question": "How should the Ombrexa inhaler be cleaned?",
+    "block_ids": [
+     "OMB-US-CARE"
+    ]
+   }
+  ],
+  "uncovered": []
+ },
+ "tool_calls": [
+  {
+   "tool": "mcp__mi__search_approved_content",
+   "input": {
+    "product": "OMB",
+    "country": "US",
+    "query": "How many inhalations of Ombrexa per day?"
+   },
+   "allowed": true,
+   "reason": "Verified Permissions: ALLOW (agents.cedar)",
+   "returned": [
+    "OMB-US-DOSE",
+    "ISI-OMB-US",
+    "OMB-US-CARE",
+    "OMB-US-INTER"
+   ]
+  },
+  {
+   "tool": "mcp__mi__search_approved_content",
+   "input": {
+    "product": "OMB",
+    "country": "US",
+    "query": "How should the Ombrexa inhaler be cleaned?"
+   },
+   "allowed": true,
+   "reason": "Verified Permissions: ALLOW (agents.cedar)",
+   "returned": [
+    "ISI-OMB-US",
+    "OMB-US-CARE",
+    "OMB-US-DOSE",
+    "OMB-US-INTER"
+   ]
+  }
+ ],
+ "usage": {
+  "input_tokens": 4,
+  "output_tokens": 472,
+  "cache_read_input_tokens": 2583,
+  "cache_creation_input_tokens": 1703
+ },
+ "model_usage": {
+  "claude-haiku-5-5": {
+   "inputTokens": 4,
+   "outputTokens": 472
+  }
+ },
+ "cost_usd": 0.000603,
+ "agent": "assembler",
+ "key": "652ff3068f8b1ce469e564de",
+ "prompt_version": "2026-10-29.1",
+ "model": "claude-haiku-5-5",
+ "user_prompt": "{\"product\": \"OMB\", \"country\": \"US\", \"questions\": [{\"text\": \"How many inhalations of Ombrexa per day?\", \"topic\": \"dosing\"}, {\"text\": \"How should the Ombrexa inhaler be cleaned?\", \"topic\": \"inhaler_care\"}]}",
+ "recorded_at": "2026-10-29T14:54:36+00:00"
+}

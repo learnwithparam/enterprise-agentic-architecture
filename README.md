@@ -1,4 +1,4 @@
-# Build a regulated AI inquiry workflow
+# Build an agentic AI system for a regulated company
 
 Project 1 of the Agentic AI Buildcamp for Engineers & PMs. Four 10-minute sessions, each with a lab you run
 and a test that proves the property.
@@ -15,12 +15,12 @@ without ever sending a sentence that Compliance cannot trace to current, approve
 ever missing an adverse event.
 
 Quillon Biopharma is synthetic, and so is every doctor, product and content block. The architecture is
-the real one: agents on the Claude Agent SDK, all on `claude-haiku-5-5`, and AWS services running locally
+the real one: agents on the Claude Agent SDK, on `claude-haiku-5-5` or `claude-sonnet-5-5`, and AWS services running locally
 on [Floci](https://floci.io/). The same boto3 code runs against AWS.
 
 | Before | After, in this repository |
 |---|---|
-| Each question routed by hand between Medical and Legal, taking days | A fixed graph routes each inquiry in one pass; safe, cleared topics are answered at once |
+| Each question routed by hand between Medical and Legal, taking days | Eight agents with goals and limits plan their own steps under a policy kernel; safe, cleared topics are answered at once |
 | Nobody can prove a reply was approved content | Every sentence carries its block, version and MLR approval, checked again at the moment of sending |
 | An adverse event can sit in a general inbox | Any possible adverse event goes to pharmacovigilance before any other rule; the eval gate fails the release if one is missed |
 | Permissions live in application code | Every permission is a Cedar policy in Verified Permissions, including the agents' own tool calls |
@@ -33,13 +33,15 @@ on [Floci](https://floci.io/). The same boto3 code runs against AWS.
 Needs Docker, [uv](https://docs.astral.sh/uv/) and Node 22.
 
 ```bash
-make up       # Floci (local AWS) and every resource: DynamoDB, S3, SQS, EventBridge,
+make up       # Postgres with pgvector, and Floci (local AWS) with every resource: DynamoDB, S3, SQS, EventBridge,
               # Step Functions, Cognito, Verified Permissions, SSM, CloudWatch Logs
 make serve    # the console on http://localhost:8765
 make check    # the gate: tests, labs, evals, mutants, prose, web build, diagrams
 ```
 
 Model calls replay from `recordings/` by default, so all of the above is free and needs no API key.
+For live calls copy `.env.example` to a file named `.env` (git ignores it) and set `ANTHROPIC_API_KEY`,
+then run `make serve LIVE=1`. The repo reads that file into its own process only; nothing sources it.
 `make record` calls Haiku 5.5 for every inquiry, about two cents in total, under the spend cap in
 `policies/autonomy.toml`.
 
@@ -54,6 +56,10 @@ case study and the delivery plan.
   cares about, traced through the code.
 - [Product walkthrough](docs/product-walkthrough.md): the console screen by screen, with the moments it
   refuses to answer or act.
+- [Coverage](docs/coverage.md): every ask in the case study, every role requirement and every agentic concept,
+  with the doc, screen, lab and test for each, checked by `tests/test_coverage.py`.
+- [Validation pack](docs/validation-pack.md): a GAMP 5 style map from each requirement to its test and mutant.
+- [EU AI Act classification](docs/eu-ai-act.md): where each agent falls and which control meets each duty.
 - [Delivery plan](docs/delivery-plan.md): from first conversations to a first release in Germany.
 - [Architecture decisions](docs/adr/README.md): each one names the failure it prevents and the test that
   enforces it.
@@ -63,10 +69,10 @@ case study and the delivery plan.
 
 | Path | What it holds |
 |---|---|
-| `src/hcpagents/` | The graph, agents, grounding, guards, Cedar client, ledger, API and AWS provisioning |
+| `src/hcpagents/` | The policy kernel, agents, grounding, guards, Cedar client, ledger, API and AWS provisioning |
 | `policies/` | Cedar policies and the autonomy settings Compliance controls |
 | `world/` | The synthetic company: products, doctors, people, content blocks, inquiries |
 | `evals/` | The release gate thresholds and the last report |
 | `recordings/` | Recorded Haiku 5.5 calls, keyed on agent, prompt version, model and input |
-| `web/` | The Astro console |
+| `web/` | The Next.js console |
 | `.claude/` | Rules, a compliance reviewer subagent, skills and a model hook for working on this repository with Claude Code |

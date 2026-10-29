@@ -10,6 +10,18 @@ const out = process.argv[2];
 if (!out) throw new Error('usage: node scripts/capture.mjs <out-dir>');
 const base = process.env.MI_CONSOLE || 'http://localhost:8765';
 const full = process.env.FULL === '1';
+const PASSWORD = process.env.MI_DEMO_PASSWORD || 'local-demo-only';
+
+// Sign in the way the console does: exchange the password for a token over the API.
+const tokens = {};
+async function tokenFor(user) {
+  if (!tokens[user]) {
+    const r = await fetch(`${base}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user, password: PASSWORD }) });
+    if (!r.ok) throw new Error(`sign in as ${user}: HTTP ${r.status}`);
+    tokens[user] = (await r.json()).token;
+  }
+  return tokens[user];
+}
 
 const click = (name) => async (page) => {
   await page.getByRole('button', { name }).first().click();
@@ -18,6 +30,14 @@ const click = (name) => async (page) => {
 const reach = (sel) => async (page) => page.locator(sel).first().scrollIntoViewIfNeeded();
 // for a block taller than the window: put the top of its section at the top
 const top = (sel) => async (page) => page.locator(sel).first().evaluate((e) => e.closest('section').scrollIntoView());
+
+// Approving asks for the password again: that is the e-signature.
+const sign = async (page) => {
+  await page.getByRole('button', { name: 'Approve and send' }).click();
+  await page.locator('#sign-password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign and send' }).click();
+  await page.locator('.toast').first().waitFor();
+};
 
 // One entry per screen section in the doc. Order matters: withdraw happens before the blocked approval.
 export const screens = [
@@ -39,15 +59,17 @@ export const screens = [
     await page.locator('.toast').first().waitFor();
   } },
   { name: 'approve-blocked', at: '/case?id=inq-103', as: 'u-brandt', act: async (page) => {
-    await click('Approve and send')(page);
+    await sign(page);
     await page.locator('.staple li.bad').first().waitFor();
     await page.waitForLoadState('networkidle');
     await page.locator('.staple').scrollIntoViewIfNeeded();
   } },
   { name: 'wrong-country-reviewer', at: '/case?id=inq-112', as: 'u-hale', act: async (page) => {
     await page.locator('.decide').scrollIntoViewIfNeeded();
-    await click('Approve and send')(page);
+    await sign(page);
   } },
+  { name: 'agents', at: '/agents' },
+  { name: 'releases', at: '/releases' },
   { name: 'proof', at: '/proof' },
   { name: 'ledger-tamper', at: '/proof', act: async (page) => {
     await click('Change a past entry')(page);
@@ -71,7 +93,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     for (const s of screens) {
       if (only && !only.includes(s.name)) continue;
       const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-US', timezoneId: 'UTC', reducedMotion: 'reduce', colorScheme: 'light' });
-      await ctx.addInitScript((id) => localStorage.setItem('mi-user', id), s.as || 'u-raman');
+      const user = s.as || 'u-raman';
+      const token = await tokenFor(user);
+      await ctx.addInitScript(([id, t]) => { localStorage.setItem('mi-user', id); sessionStorage.setItem(`mi-token-${id}`, t); }, [user, token]);
       const page = await ctx.newPage();
       const errors = [];
       page.on('pageerror', (e) => errors.push(e.message));

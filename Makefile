@@ -1,7 +1,7 @@
 .PHONY: up down provision test evals record serve web walkthrough check lab
 
-up:            ## start Floci (local AWS) and provision every resource
-	docker compose up -d
+up:            ## start Floci (local AWS), Postgres, Temporal and Valkey, then provision every resource (first run downloads a 220 MB embedding model)
+	docker compose up -d --wait
 	@for i in $$(seq 1 60); do curl -sf -o /dev/null localhost:4566 && break; sleep 1; done
 	uv run python -m hcpagents.infra
 
@@ -35,6 +35,7 @@ lab:           ## make lab N=<lab-folder>: run one lab's tests
 check: up      ## the gate: tests, evals, mutants, prose, web build, mermaid
 	uv run pytest -q
 	uv run python -m hcpagents.evals
+	uv run python -m hcpagents.retrieval_eval
 	uv run python scripts/mutate.py
 	uv run python scripts/check_prose.py
 	$(MAKE) web

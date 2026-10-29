@@ -56,29 +56,33 @@ why, Compliance will not let the AI touch a doctor, and they would be right.
 
 ### 2. Platform architecture
 
+The platform is a system of agents under one control plane, not one agent and not a pipeline with agents as
+steps. The [architecture walkthrough](./architecture-walkthrough.md) follows one doctor through it in four
+acts, with a diagram per step. This section is the summary.
+
 ```text
  CRM   Marketing   Contact centre   Portal   Chatbot
    \        |             |           |        /
-    +-------+------ EventBridge ------+-------+
-            |                         |
-        HCP 360                 Inquiry graph -----> Agents (Haiku 5.5, Bedrock in production)
-  timeline, consent,        7 nodes, routing table      safety, triage, assembler
-  planned touch checks       (Step Functions)           read and select only
-            |                         |
-            +---- Content store <-----+----> Handoff queues: review, pharmacovigilance
-            |   blocks, versions,     |
-            |   MLR ids, validity     +----> Audit ledger: hash chain, KMS signed,
-            |                                S3 Object Lock archive
-     Verified Permissions (Cedar) decides every human action and every agent tool call
+    +-------+---- signed webhooks and batch ---+
+            |
+   Identity resolution --> HCP 360 timeline (the agents' shared memory)
+            |                       |
+   Eight agents (Temporal workflows, LangGraph inside) <--- events (EventBridge, SQS)
+            |
+   Control plane: policy kernel, Cedar, autonomy ladder, model router, AI gateway,
+                  eval gate and releases, ledger
+            |
+   Data plane: Postgres (row-level security, pgvector), Valkey, S3 Object Lock, KMS per tenant
 ```
 
-The platform has four parts, and only one of them uses a model.
+**Four planes.** The agent plane holds eight long-lived agents. The control plane holds everything no agent
+may override. The data plane holds state, search, events and the archive. The interface plane is the
+console, the `/v1` API, an MCP server, the `hcp` CLI and the channel webhooks.
 
-**HCP 360.** One record per doctor, keyed on the national registry id, with the ids each source system uses
-(CRM, marketing automation, contact centre, portal). Every touch from every channel lands as an event on one
-timeline: when, which channel, which product, whether it was promotional, which content block it used. A
-planned touch (a campaign email, a rep visit) asks the platform before it goes, and gets a yes or a list of
-reasons for no:
+**HCP 360.** One record per doctor, keyed on the national registry id, with the ids each source system uses.
+Every touch from every channel lands as an event on one timeline. Webhooks are signed and land once; a nightly
+batch is a Temporal schedule; an id nobody can match stays unlinked rather than guessed. A planned touch asks
+the platform before it goes and gets a yes or a list of reasons for no:
 
 - no consent for that channel on record;
 - the country's promotional cap for 30 days is reached (two in Germany, four in the US, three in Japan in this
@@ -86,153 +90,144 @@ reasons for no:
 - an open medical information case on the same product, so promotion waits until Medical has answered;
 - the content block it uses is no longer current, or is approved for another country.
 
-In production the timeline is fed by change events from each system (Salesforce or Veeva CRM, the marketing
-platform, Amazon Connect for the contact centre) through EventBridge, and the operational store is DynamoDB.
-The same events land in S3 for analytics under Lake Formation, which is where combined insight comes from.
+**How the platform knows content is approved now.** Content is a set of blocks with an id, a version, the MLR
+approval reference, a country, a product, a topic, validity dates and a status. The MLR system stays the source
+of truth; the platform keeps a read copy updated by events. "Current" is computed, never stored.
 
-**How the platform knows content is approved now.** Content is a set of blocks. Each block has an id, a
-version, the MLR approval reference, a country, a product, a topic, a valid-from and valid-to date, and a
-status. The MLR system stays the source of truth; the platform keeps a read copy that is updated by events.
-"Current" is computed, never stored: approved, not withdrawn, and today inside its validity dates.
+**What happens when content changes.** A withdrawal or expiry publishes `ContentWithdrawn`. The content
+steward finds every open draft and planned touch that uses the block, pulls them back to review and evicts
+the cache. The check also runs at the instant of sending, against the store as it is then, so a block
+withdrawn one second before a human presses Approve still stops the send. Withdraw `VEL-DE-RENAL` in the
+console and the German renal draft can no longer be sent.
 
-**What happens when content changes.** A withdrawal or expiry publishes `ContentWithdrawn`. A consumer finds
-every open draft and every planned touch that uses the block and checks it again. Drafts are marked failing
-and stay failing; nobody can approve them. The check also runs at the instant of sending, against the store
-as it is then, so a block withdrawn one second before a human presses Approve still stops the send. The
-slice demonstrates exactly this: withdraw `VEL-DE-RENAL` and the German renal draft can no longer be sent.
-
-**Multi-country rules.** Each country is data: its label (which populations and indications are approved),
-its promotional cap, its AI disclosure block, the topics cleared for automatic replies and a switch to turn
-automatic replies off. People carry a country, and the Cedar policies compare it with the case's country, so
-a US reviewer cannot approve a Japanese draft. Data residency follows the country: EU doctors' data stays in
-an EU region, and the model is called in that region.
+**Multi-tenant, multi-country.** Quillon Biopharma is the first tenant and Marlowe Therapeutics the second.
+The tenant comes from the signed token, Postgres row-level security filters every row, and Cedar refuses a
+crossing. Each country is data: its label, promotional cap, AI disclosure block, cleared topics and an
+automatic-reply switch. A US reviewer cannot approve a Japanese draft.
 
 **AWS choices.**
 
-| Job | In this prototype, on Floci | In production | Why |
+| Job | Locally on Floci and Docker | In production (CDK, synthesized and never deployed here) | Why |
 |---|---|---|---|
-| Content, cases, HCP 360, touches | DynamoDB | DynamoDB with point-in-time recovery | Key lookups at any volume, no servers |
-| Audit archive | S3 Object Lock, compliance mode, 10 years | Same, in a separate audit account | Nobody, including the root user, can delete it |
-| Ledger checkpoints | KMS asymmetric signing key | Same, key held in the audit account | Compliance can verify without trusting the app team |
-| Permissions | Verified Permissions with Cedar | Same | Policies are readable by Compliance, testable, and every decision is logged |
-| People and roles | Cognito user pool | IAM Identity Center federated to the company IdP | Joiners and leavers are handled where they already are |
-| Routing | Step Functions, generated from the routing table | Express workflows, one per inquiry | The route is a reviewed artefact, not code inside a prompt |
-| Handoffs | EventBridge to SQS | Same, plus connectors into the safety database and Veeva | Each team's tool consumes its own queue |
-| Per-country autonomy | SSM Parameter Store | AppConfig with staged rollout and rollback | A kill switch that takes effect without a deploy |
-| Metrics and logs | CloudWatch | CloudWatch, plus Langfuse traces per agent call | Operations and model quality on separate dashboards |
-| Model | Claude Haiku 5.5 through the Claude Agent SDK | Claude on Amazon Bedrock in-region, with Bedrock Guardrails | Data stays in the account and region |
-
-Floci emulates these services locally, so the whole platform starts with `make up` and no cloud account, and
-the code that talks to Floci is the same boto3 code that talks to AWS.
+| State, search | Postgres with pgvector | Aurora Postgres | Row-level security and joins decide it (ADR 0009) |
+| Cache, rate limits | Valkey | ElastiCache | The cache only forgets, so it can fail safely |
+| Audit archive | S3 Object Lock, compliance mode, 10 years | Same, one bucket and key per tenant | Nobody, including the root user, can delete it |
+| Ledger checkpoints | KMS asymmetric signing key | Same | Compliance can verify without trusting the app team |
+| Permissions | Verified Permissions with Cedar | Same | Policies are readable by Compliance and every decision is logged |
+| People and roles | Cognito user pool | Cognito, federated to the company identity provider | A user cannot write their own role or tenant |
+| Durable work | Temporal dev server | A Temporal cluster the stack takes as an input | Waits of days, timers and crash resume |
+| Events | EventBridge to SQS, with a dead-letter queue | Same, plus connectors to the safety database | Each team's tool consumes its own queue |
+| Services | One image, two processes | ECS Fargate for the API and the worker | No Kubernetes for two stateless services (ADR 0031) |
+| Models | Claude Haiku 5.5 and Sonnet 5.5 through our AI gateway | Same; a Bedrock adapter is not built | The router picks the model, the gateway meters it |
 
 ### 3. Agentic AI in a regulated setting
 
-**The rule underneath everything:** the model never writes a sentence a doctor reads, and never chooses
-where a case goes. It reads, classifies and selects. Code decides and composes.
+**The rule underneath everything:** the model never writes a sentence a doctor reads, and never chooses where
+a case goes. It reads, classifies, plans and selects. Code decides and composes.
 
-**What is autonomous, what needs a human, what gets no AI.**
+**Eight agents, each with a goal and a limit.** `world/agents.toml` is the roster and the Agents page shows it.
 
-| The AI does on its own | A human in the loop decides | No AI at all |
-|---|---|---|
-| Screen every message for adverse events and special situations | Any reply on a topic not cleared for automatic sending in that country | Adverse event and special situation handling (pharmacovigilance) |
-| Split a message into questions and tag topic, population and indication | Any reply where approved content does not cover every question | Off-label answers, which Medical writes |
-| Pick the approved block ids that answer each question | Senders who are not verified HCPs, unknown products | Writing or editing any medical sentence |
-| Send a reply when every rule passes and the topic is cleared | Turning automatic replies on or off per country | Approving content, which stays in MLR |
+| Agent | Acts alone | Only proposes | Never |
+|---|---|---|---|
+| Safety sentinel | Opens a pharmacovigilance case, freezes contact | Nothing | Assesses causality |
+| Inquiry agent | Plans, retrieves, selects, asks a clarifying question | Drafts outside cleared topics | Writes medical text |
+| Outreach coordinator | Holds a duplicate or conflicting send | Every new contact | Contacts without consent |
+| Content steward | Pulls impacted drafts back to review | Content requests | Edits content |
+| Insight agent | Writes traced digests for internal teams | Themes for Medical Affairs | Anything to a doctor |
+| Guardian | Trips a kill switch, lowers autonomy | Raising it back | Raises autonomy |
+| Improver | Runs candidates against the gate | A new prompt or router | Promotes anything |
+| Supervisor | Assigns and breaks ties by policy | Conflicts it cannot settle | Overrides the kernel |
 
-**The graph.** Seven nodes run in a fixed order: intake, safety screen, classify, scope check, assemble,
-verify, autonomy. Each node establishes facts (`ae`, `verified_hcp`, `intent`, `in_scope`, `covered`,
-`grounded`, `auto_allowed`). After every node an engine walks a ten-rule routing table in order; the first
-rule whose fact matches decides the route, and a rule whose fact is still unknown makes the engine wait for
-the next node instead of guessing. Safety comes first, so an adverse event stops the graph before the model
-has even classified the question. The table is the policy; the same table generates the Step Functions
-definition. Tests walk every combination of facts through the table, and run one case per rule through
-Step Functions on Floci to check it routes like the Python engine.
+The rule: **an agent acts alone only in the direction that lowers risk.** Sending, contacting and promoting
+are proposals, and some actions are never available.
 
-**Three agents, each with one job.** All three run on the Claude Agent SDK, pinned to `claude-haiku-5-5`,
-with no built-in tools, no settings files, no slash commands and structured JSON output.
+**The policy kernel.** Agents choose how to do a step. The kernel owns which steps exist, their order, which
+facts each may set and the route those facts imply. A ten-rule routing table is walked in order after every
+step; the first rule that matches decides, and a rule whose fact is unknown waits instead of guessing. Safety
+comes first, so an adverse event stops the case before the model has classified the question. A plan that
+skips the screen, rewrites a fact or loops past its limit is refused and the case goes to a person. The
+same table generates the Step Functions definition, so a picture of it cannot drift from the code.
 
-- The **safety agent** returns possible adverse events and special situations with verbatim quotes. Keyword
-  rules run beside it; either one is enough. The agent can add signals, never remove them.
-- The **triage agent** splits the message into questions and tags each one. A keyword screen for attempts to
-  change the rules runs beside it; either one is enough to decline.
-- The **assembler agent** searches approved content through two read-only MCP tools and returns block ids per
-  question. It cannot see withdrawn or expired blocks, and it cannot write text.
+**Model routing.** A pure function picks Haiku 5.5 for high-volume work, Sonnet 5.5 for planning and any
+failed try, and a person after that or when the budget is gone. Nothing else can be returned.
 
 **Guardrails, in the order they fire.**
 
 1. The inquiry text is wrapped as untrusted data; a test checks it cannot close its own wrapper.
 2. Every tool call passes a guard: the tool must be on an allowlist and target the case's own country and
-   product, and then Verified Permissions must allow it (`agents.cedar`). Denied calls are recorded.
+   product, and then Verified Permissions must allow it.
 3. Agent output must match a JSON schema, and a block id survives only if it exists, belongs to the case's
-   product and country, and a permitted tool call actually returned it.
-4. Every sentence of the composed reply must match a sentence in a current approved block for this product
-   and country; the safety information block and the AI disclosure block must be present.
+   product and country, and a permitted call actually returned it.
+4. Every sentence of the composed reply must match a sentence in a current approved block, and the safety
+   information and AI disclosure blocks must be present.
 5. The same check runs again at the instant of sending, and fails closed.
-6. A spend cap per case and per session, computed from tokens, stops live calls; any model other than Haiku
-   5.5 fails the run.
+6. Every model call goes through the AI gateway, which holds a virtual key per tenant and agent, a budget and
+   a spend log. A call off the two-model allowlist fails the gate.
+
+**Always on and durable.** A case that needs a reviewer is a Temporal workflow that waits. A worker crash
+resumes it where it stopped and finishes it once, an SLA timer escalates a case nobody has taken, and approval
+asks the reviewer for their password again, which is the electronic signature. Every consumer is idempotent
+and a message that keeps failing lands in a dead-letter queue.
 
 **Handoffs and recording.** A case that needs a human is published to EventBridge and lands in that team's
-SQS queue: `ReviewNeeded` for Medical, `SafetySignal` for pharmacovigilance with the quoted words and the
-date received (day zero for the reporting clock). Every step appends to the audit ledger: the case received
-(with a hash of the text, not the text), each agent call with model, prompt version and tokens, each tool
-call with its guard and Cedar decision, the route and the rule that chose it, every approval, rejection,
-withdrawal and permission refusal.
+SQS queue: `ReviewNeeded` for Medical, `SafetySignal` for pharmacovigilance with the quoted words and the date
+received (day zero for the reporting clock). Every step appends to the hash-chained ledger, with personal
+data sealed under a key per person, so erasing a person deletes the key and leaves the chain intact.
 
 **Traceability.** From any sentence a doctor received you can walk back to the block, its version and its MLR
-approval; from the case to the agent calls, the prompt version and the recorded model output; from any human
+approval; from the case to the agent calls, the prompt version, the release and the trace; from any human
 action to the Cedar policy file that allowed or refused it. Each ledger entry carries the hash of the one
-before it, every entry is copied to S3 under Object Lock, and the chain head is signed with KMS every ten
-entries.
+before it, is copied to S3 under Object Lock, and the chain head is signed with KMS every ten entries.
+
+**Self-improvement, proven per release.** A release pins the prompts, the router, the retrieval setup and the
+policy table and gets a hash for an id. Reviewer corrections become proposals from the improver, which
+promotes nothing. A candidate release runs the eval gate: safety metrics are absolute (adverse-event recall
+1.0, zero ungrounded sentences, zero unsafe automatic sends, zero off-allowlist calls), and quality and cost
+are compared with the baseline release. A person promotes it. The Releases page shows each metric across
+releases, and the guardian trips a country's kill switch if reviewers start rejecting drafts.
 
 **Proving it is safe to Compliance.** Not with a slide. Compliance gets:
 
 - the routing table and the Cedar policies, which are short enough to read;
-- the release gate: every change to a prompt, the model or the content runs twenty inquiries through the
-  graph and fails on one missed adverse event, one ungrounded sentence, one unsafe automatic send or one call
-  to another model (`evals/gate.toml`);
+- the release gate and its history per release (`evals/gate.toml`, the Releases page);
 - the ledger, which they can verify themselves, and the archive, which nobody can delete;
-- the kill switch per country, which they hold.
+- the kill switch per country, which they hold;
+- a [validation pack](./validation-pack.md) that maps each requirement to the test and the mutant that
+  enforce it, and an [EU AI Act classification](./eu-ai-act.md).
 
 **Regulation this design answers.** Pharmacovigilance rules (EU GVP Module VI) start the reporting clock when
 anyone in the company, including a system, first receives the information, so the safety screen runs first
-and routes at once. Off-label promotion rules mean unsolicited off-label questions get a scientific answer
-written by Medical, never a generated one. The EU AI Act's transparency duty (Article 50) is met by an AI
-disclosure block in every assembled reply; a medical information triage system is not obviously high-risk
-under Annex III, but this design keeps the record-keeping, human oversight and accuracy evidence the
-high-risk articles ask for, so a reclassification costs paperwork, not a rebuild. Automated Reasoning checks
-in Bedrock Guardrails are a candidate second verifier for policy statements in production.
+and routes at once, and the sentinel reads every channel so nobody has to ask. Off-label promotion rules mean
+unsolicited off-label questions get a scientific answer written by Medical, never a generated one. The EU AI
+Act's transparency duty (Article 50) is met by an AI disclosure block in every assembled reply.
 
 ### 4. Engineering practices
 
 - **Decisions are written down.** Each architecture decision is an ADR in `docs/adr/` with the options
   considered and the failure it prevents.
-- **One gate.** `make check` runs the unit and end-to-end tests on Floci, the eval gate, the mutation run,
-  the prose check, the web build and a parse of every mermaid diagram. A check that is not in `make check`
-  does not exist.
-- **Tests that bite.** `scripts/mutate.py` breaks each safety property in turn (the adverse event rule, the
-  injection rule, content currency, the check at send, the tool guard, the model pin and two Cedar
-  policies) and fails the gate if no test catches it. Writing it found two tests that passed for the wrong
-  reason; both were fixed.
-- **Model changes are releases.** The model id, prompt version and price table live in one module; a new
-  prompt version needs a new recording and a green gate. Replay is the default, so CI and demos cost nothing
-  and give the same answer every time; `LIVE=1` re-records.
-- **Release safety.** Automatic replies roll out per country and per topic through AppConfig, starting with
-  four weeks where every draft is approved by a human. The kill switch takes effect without a deploy.
-- **Monitoring.** Route counts, latency, cost per case and queue depth in CloudWatch; per-call traces with
-  prompt, output and tokens in Langfuse; alerts on a rise in declined or pharmacovigilance routes, on any send
-  blocked at the last check, and on a broken ledger.
+- **One gate.** `make check` runs the tests, the evals, the mutation run, the prose check, the web build, a
+  parse of every mermaid diagram, `cdk synth` with cdk-nag and the coverage matrix. A check that is not in
+  `make check` does not exist.
+- **Tests that bite.** `scripts/mutate.py` breaks each safety property in turn and fails the gate if no test
+  catches it.
+- **Model changes are releases.** The model ids, prompt versions and price table live in one place; a new
+  prompt version needs a new release and a green gate. Replay is the default, so CI and demos cost nothing and
+  give the same answer every time; `LIVE=1` runs the real models.
+- **Release safety.** Automatic replies are switched on per country and per topic, starting with four weeks
+  where every draft is approved by a human. The kill switch takes effect without a deploy.
+- **Monitoring.** Per-call traces in OpenTelemetry's GenAI conventions with personal data redacted, exported to
+  Phoenix locally or Langfuse Cloud by environment; cost, override rate and latency split by release.
+- **Supply chain.** GitHub Actions runs the gate, SAST, an SBOM, secret scanning and a dependency audit.
 - **AI tools used to build it.** Claude Code with the repository's own `.claude/` folder: path-scoped rules
-  for the agents and policies, a compliance reviewer subagent that reads any diff touching routing, guards or
-  Cedar, skills for adding a content block and recording a new prompt version, and a hook that refuses any
-  model id other than Haiku 5.5.
+  for the agents and policies, skills for adding a content block and recording a prompt version, and a hook
+  that refuses any model id outside the two allowed.
 
 ### 5. First release and how we measure it
 
 **Scope.** One country (Germany), one product (Veltrona), two channels (portal and email), and the medical
 information inquiry flow end to end, with HCP 360 holding planned touches for that product. Automatic replies
 stay off for the first four weeks; the AI drafts and a human approves every reply. Then Compliance clears
-dosing, administration and storage, one topic at a time, based on the reviewer approval rate for that
-topic.
+dosing, administration and storage, one topic at a time, based on the reviewer approval rate for that topic.
 
 **Out of scope for the first release:** other countries, chatbots, rep-entered questions, and any
 promotional content generation.
@@ -249,12 +244,19 @@ promotional content generation.
 | Planned touches held for cap, consent or open case | Unknown | Reported weekly to brand teams |
 | Model cost per case | Not applicable | Under one cent |
 
+**Known limits of this build.** Autonomy settings and queues are shared across tenants. There is no Bedrock
+failover adapter. Sign-in is a password exchange, not an OAuth device flow, and the MCP server hosts no OAuth
+server. The CDK stack has no migration task, blue/green deploy or second region. The `hcp_app` database role
+in `migrations/001_documents.sql` has a local-only password that production sets from Secrets Manager. The
+static console sets no content security policy of its own.
+
 ## Part B: the slice
 
 ### What it is
 
 The medical information inquiry flow: an unsolicited question from a doctor, on any channel, through the
-graph to a reply, a reviewer or the team that owns it. Run it with `make up && make serve` and open
+inquiry agent, bounded by the policy kernel, to a reply, a reviewer or the team that owns it. The slice also
+shows the other agents at work: the sentinel, the outreach coordinator and the content steward. Run it with `make up && make serve` and open
 `http://localhost:8765`. The [product walkthrough](./product-walkthrough.md) is a screen-by-screen script.
 
 ### Why this slice
@@ -292,7 +294,7 @@ It also shows the moments the system must not answer or act, which a happy-path 
 - A question with two parts, one on-label and one off-label: the whole case goes to Medical; there is no
   partial automatic reply.
 - The same question is on-label in the US and off-label in Germany: scope is per country.
-- An adverse event written in German: the English keyword rules miss it, the safety agent catches it, and the
+- An adverse event written in German: the English keyword rules miss it, the safety sentinel catches it, and the
   eval set includes it.
 - A patient, not a doctor, writes in: an unverified sender never gets an automatic reply.
 - An expired block: it is not evidence, so the case goes to review with no draft.

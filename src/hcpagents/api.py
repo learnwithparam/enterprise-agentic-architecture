@@ -3,58 +3,124 @@
 uv run uvicorn hcpagents.api:app --port 8765
 """
 
+import contextlib
 import json
-from functools import cache
+import os
+from datetime import datetime
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from hcpagents import agents, authz, cases, events, graph, hcp360, infra, ledger, observe, store, world
-from hcpagents.aws import client
+from hcpagents import agents, auth, authz, aws, cases, db, durable, events, gateway, graph, guardian, hcp360, improver, infra, ingest, insight, ledger, mcp_server, observe, outreach, ratelimit, releases, store, v1, world
 
-app = FastAPI(title="Medical information platform")
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Dev runs the Temporal worker inside the API; in production MI_WORKER=off and `hcpagents.worker` is its own deployable."""
+    with gateway.for_live_calls():
+        server = mcp_server.build()
+        mcp_server.mount.current = server.streamable_http_app()
+        async with server.session_manager.run():
+            if os.environ.get("MI_WORKER", "embedded") == "off":
+                yield
+                return
+            client = await durable.connect()
+            async with durable.worker(client):
+                await durable.start_steward(client)
+                await durable.ensure_schedules(client)
+                yield
+
+
+app = FastAPI(title="Medical information platform", lifespan=lifespan)
 DIST = world.ROOT / "web" / "dist"
 EVAL_REPORT = world.ROOT / "evals" / "report.json"
 
 
-@cache
-def _pool() -> str:
-    return client("ssm").get_parameter(Name="/mi/cognito/pool")["Parameter"]["Value"]
+PUBLIC = {"/api/login", "/api/login-options", "/api/health"}
+PROTECTED = ("/api/", "/v1/", "/mcp")
+MACHINE = ("/v1/", "/mcp")
 
 
-def user(x_user: str | None) -> dict:
-    """The acting user, read from Cognito. Production takes this from a verified JWT instead of a header."""
-    if not x_user:
-        raise HTTPException(401, "Name the acting user in the X-User header")
-    try:
-        u = client("cognito-idp").admin_get_user(UserPoolId=_pool(), Username=x_user)
-    except Exception as e:
-        raise HTTPException(401, "Unknown user") from e
-    a = {x["Name"]: x["Value"] for x in u["UserAttributes"]}
-    p = world.person(u["Username"])
-    return {"id": u["Username"], "name": a["name"], "role": a["custom:role"], "country": a["custom:country"], "title": p["title"]}
+class Login(BaseModel):
+    user: str
+    password: str
+
+
+def current_user(request: Request) -> dict:
+    """The verified user the middleware attached to this request."""
+    return request.state.user
 
 
 @app.middleware("http")
-async def known_user_on_every_api_call(request: Request, call_next):
-    """No /api route answers without a user Cognito knows, so a missing header never falls back to anyone."""
-    if request.url.path.startswith("/api/"):
+async def verified_token_on_every_api_call(request: Request, call_next):
+    """No /api, /v1 or /mcp route answers without a signed token, and the caller's tenant scopes every query they run."""
+    path = request.url.path
+    if path.startswith(PROTECTED) and path not in PUBLIC:
+        scheme, _, token = request.headers.get("authorization", "").partition(" ")
         try:
-            user(request.headers.get("x-user"))
-        except HTTPException as e:
-            return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+            if scheme.lower() != "bearer" or not token:
+                raise auth.Unauthenticated("Send the ID token as Authorization: Bearer")
+            request.state.user = auth.verify(token)
+        except auth.Unauthenticated as e:
+            return JSONResponse({"detail": str(e)}, status_code=401)
+        if path.startswith(MACHINE) and (wait := ratelimit.hit(request.state.user["tenant"], request.state.user["id"])):
+            return JSONResponse({"detail": "Rate limit reached"}, status_code=429, headers={"Retry-After": str(wait)})
+        with db.as_tenant(request.state.user["tenant"]):
+            return await call_next(request)
     return await call_next(request)
+
+
+@app.post("/hooks/{tenant}/{channel}", status_code=202)
+async def channel_webhook(tenant: str, channel: str, request: Request):
+    """A channel reports an event. No token here: the HMAC signature over the body is the credential."""
+    if tenant not in {t["id"] for t in world.tenants()}:
+        raise HTTPException(404, "No such tenant")
+    body = await request.body()
+    try:
+        ingest.verify(tenant, channel, request.headers.get("x-mi-timestamp", ""), request.headers.get("x-mi-signature", ""), body)
+        return ingest.accept(tenant, channel, json.loads(body), via="webhook")
+    except ingest.Rejected as e:
+        raise HTTPException(e.status, str(e)) from e
+    except json.JSONDecodeError as e:
+        raise HTTPException(422, "The body is not JSON") from e
+
+
+@app.post("/api/login")
+def login(body: Login):
+    try:
+        return {"token": auth.login(body.user, body.password)}
+    except auth.Unauthenticated as e:
+        raise HTTPException(401, str(e)) from e
 
 
 def _denied(e: cases.Denied):
     raise HTTPException(403, str(e))
 
 
+@app.get("/api/login-options")
+def login_options():
+    """Who can sign in, for the demo sign-in screen: names and roles only, never a credential.
+
+    Only against the local emulator. A real deployment lists nobody, so the screen asks for a user id and
+    the endpoint cannot be used to enumerate accounts.
+    """
+    if not aws.ENDPOINT:
+        return {"tenants": [], "people": []}
+    return {"tenants": world.tenants(),
+            "people": [{k: u.get(k) for k in ("id", "name", "role", "country", "title")} | {"tenant": u.get("tenant", world.DEFAULT_TENANT)}
+                       for u in world.directory()]}
+
+
+@app.get("/api/health")
+def health():
+    """The load balancer's liveness probe. It says nothing about the data and needs no token."""
+    return {"status": "ok"}
+
+
 @app.get("/api/session")
-def session(x_user: str | None = Header(None)):
-    return {"user": user(x_user), "mode": "live" if agents.live() else "replay", "model": agents.MODEL, "today": world.TODAY.isoformat()}
+def session(u: dict = Depends(current_user)):
+    return {"user": u, "mode": "live" if agents.live() else "replay", "model": agents.MODEL, "today": world.TODAY.isoformat()}
 
 
 @app.get("/api/meta")
@@ -63,17 +129,8 @@ def meta():
             "company": world.products()["company"], "routes": list(world.ROUTES)}
 
 
-def _visible(d: dict, u: dict) -> dict:
-    ok, why = authz.user_can(u, "ViewCaseDetail", "Case", d["id"], {"country": d["country"], "route": d["route"]})
-    if ok:
-        return d
-    keep = ("id", "route", "status", "country", "product", "created_at")
-    return {k: d.get(k) for k in keep} | {"redacted": why, "inquiry": {"id": d["id"], "channel": d["inquiry"]["channel"]}}
-
-
 @app.get("/api/inquiries")
-def inquiries(x_user: str | None = Header(None)):
-    u = user(x_user)
+def inquiries(u: dict = Depends(current_user)):
     done = {c["id"]: c for c in store.scan("mi-cases")}
     out = []
     for i in world.inquiries():
@@ -91,17 +148,16 @@ def inquiries(x_user: str | None = Header(None)):
 
 
 @app.post("/api/inquiries/{inquiry_id}/run")
-async def run_inquiry(inquiry_id: str, x_user: str | None = Header(None)):
-    u = user(x_user)
+async def run_inquiry(inquiry_id: str, u: dict = Depends(current_user)):
     if world.inquiry(inquiry_id) is None:
         raise HTTPException(404, "No such inquiry")
     try:
-        d = await cases.run(inquiry_id)
+        d = await durable.run_inquiry(inquiry_id)
     except agents.MissingRecording as e:
         raise HTTPException(409, str(e)) from e
     except (agents.BudgetError, agents.ModelPolicyError) as e:
         raise HTTPException(402, str(e)) from e
-    return _visible(d, u)
+    return cases.visible(d, u)
 
 
 class Custom(BaseModel):
@@ -111,36 +167,33 @@ class Custom(BaseModel):
 
 
 @app.post("/api/inquiries")
-async def custom_inquiry(body: Custom, x_user: str | None = Header(None)):
+async def custom_inquiry(body: Custom, u: dict = Depends(current_user)):
     """A question typed in the console. Needs LIVE=1 because nothing is recorded for it."""
-    u = user(x_user)
     if not agents.live():
         raise HTTPException(409, "Typed questions call the model. Restart the server with LIVE=1 to allow it.")
     n = len([c for c in store.scan("mi-cases") if c["id"].startswith("custom-")]) + 1
     inq = {"id": f"custom-{n}", "channel": body.channel, "hcp": body.hcp, "received": cases._now(), "text": body.text[:2000],
            "expect": None}
     try:
-        d = await cases.run(inq["id"], inq)
+        d = await durable.run_inquiry(inq["id"], inq)
     except (agents.BudgetError, agents.ModelPolicyError) as e:
         raise HTTPException(402, str(e)) from e
-    return _visible(d, u)
+    return cases.visible(d, u)
 
 
 @app.get("/api/cases")
-def list_cases(x_user: str | None = Header(None)):
-    u = user(x_user)
-    return [_visible(c, u) for c in sorted(store.scan("mi-cases"), key=lambda c: c["id"])]
+def list_cases(u: dict = Depends(current_user)):
+    return [cases.visible(c, u) for c in sorted(store.scan("mi-cases"), key=lambda c: c["id"])]
 
 
 @app.get("/api/cases/{case_id}")
-def get_case(case_id: str, x_user: str | None = Header(None)):
-    u = user(x_user)
+def get_case(case_id: str, u: dict = Depends(current_user)):
     d = store.get("mi-cases", case_id)
     if d is None:
         raise HTTPException(404, "No such case. Run the inquiry first.")
-    d = _visible(d, u)
+    d = cases.visible(d, u)
     if "redacted" not in d:
-        d["ledger"] = [r | {"entry": r["entry"]} for r in ledger.entries(case_id)]
+        d["ledger"] = [r | {"entry": r["entry"]} for r in ledger.entries(case_id, reveal=True)]
         d["content_now"] = {s["block_id"]: _block_state(s["block_id"]) for s in (d.get("draft") or {}).get("segments", [])}
     return d
 
@@ -154,18 +207,27 @@ class Decision(BaseModel):
     note: str = ""
 
 
+class Signoff(BaseModel):
+    password: str
+
+
 @app.post("/api/cases/{case_id}/approve")
-def approve(case_id: str, x_user: str | None = Header(None)):
+async def approve(case_id: str, body: Signoff, u: dict = Depends(current_user)):
+    """The approver re-enters their password; that sign-in is their signature on the approval."""
     try:
-        return cases.approve(case_id, user(x_user))
+        signature = auth.reauthenticate(u, body.password)
+    except auth.Unauthenticated as e:
+        raise HTTPException(403, str(e)) from e
+    try:
+        return await durable.decide(case_id, u, "approve", signature=signature)
     except cases.Denied as e:
         _denied(e)
 
 
 @app.post("/api/cases/{case_id}/reject")
-def reject(case_id: str, body: Decision, x_user: str | None = Header(None)):
+async def reject(case_id: str, body: Decision, u: dict = Depends(current_user)):
     try:
-        return cases.reject(case_id, user(x_user), body.note or "No reason given")
+        return await durable.decide(case_id, u, "reject", note=body.note or "No reason given")
     except cases.Denied as e:
         _denied(e)
 
@@ -179,11 +241,11 @@ def content():
 
 
 @app.post("/api/content/{block_id}/withdraw")
-def withdraw(block_id: str, body: Decision, x_user: str | None = Header(None)):
+def withdraw(block_id: str, body: Decision, u: dict = Depends(current_user)):
     if store.get("mi-content", block_id) is None:
         raise HTTPException(404, "No such block")
     try:
-        return cases.withdraw(block_id, user(x_user), body.note or "Withdrawn by content owner")
+        return cases.withdraw(block_id, u, body.note or "Withdrawn by content owner")  # the steward re-checks the drafts
     except cases.Denied as e:
         _denied(e)
 
@@ -200,6 +262,29 @@ def hcp(hcp_id: str):
     return hcp360.view(hcp_id)
 
 
+@app.get("/api/insights")
+def insights(since: datetime | None = None):
+    return insight.digest(since)
+
+
+@app.get("/api/releases")
+def release_trend():
+    return releases.trend(world.current_tenant())
+
+
+@app.get("/api/monitors")
+def monitors():
+    """What live cases did under each release, to compare a canary with the baseline."""
+    return releases.online(world.current_tenant())
+
+
+@app.get("/api/hcps/{hcp_id}/outreach")
+def hcp_outreach(hcp_id: str):
+    if store.get("mi-hcp", hcp_id) is None:
+        raise HTTPException(404, "No such HCP")
+    return outreach.coordinate(hcp_id)
+
+
 class Autonomy(BaseModel):
     country: str
     enabled: bool
@@ -211,15 +296,14 @@ def autonomy():
 
 
 @app.post("/api/autonomy")
-def set_autonomy(body: Autonomy, x_user: str | None = Header(None)):
+def set_autonomy(body: Autonomy, u: dict = Depends(current_user)):
     try:
-        return cases.set_autonomy(body.country, body.enabled, user(x_user))
+        return cases.set_autonomy(body.country, body.enabled, u)
     except cases.Denied as e:
         _denied(e)
 
 
-def _compliance(x_user: str | None) -> dict:
-    u = user(x_user)
+def _compliance(u: dict) -> dict:
     ok, why = authz.user_can(u, "AuditLedger", "Ledger", "main", {})
     if not ok:
         raise HTTPException(403, f"{u['name']} may not run ledger checks. {why}")
@@ -240,8 +324,8 @@ def proof():
 
 
 @app.post("/api/proof/tamper")
-def tamper(x_user: str | None = Header(None)):
-    u = _compliance(x_user)
+def tamper(u: dict = Depends(current_user)):
+    _compliance(u)
     rows = ledger.entries()
     target = next((r for r in rows if r["entry"].get("type") == "routed" and r["entry"].get("route") != "send"), None)
     if target is None:
@@ -251,8 +335,8 @@ def tamper(x_user: str | None = Header(None)):
 
 
 @app.post("/api/proof/restore")
-def restore(x_user: str | None = Header(None)):
-    _compliance(x_user)
+def restore(u: dict = Depends(current_user)):
+    _compliance(u)
     v = ledger.verify()
     if not v["ok"]:
         ledger.restore(v["broken_at"])
@@ -260,9 +344,17 @@ def restore(x_user: str | None = Header(None)):
 
 
 @app.post("/api/proof/delete-archive")
-def delete_archive(x_user: str | None = Header(None)):
-    _compliance(x_user)
+def delete_archive(u: dict = Depends(current_user)):
+    _compliance(u)
     return ledger.try_delete_archive(1)
+
+
+@app.post("/api/hcps/{hcp_id}/erase")
+def erase_hcp(hcp_id: str, u: dict = Depends(current_user)):
+    try:
+        return cases.erase_person(hcp_id, u)
+    except cases.Denied as e:
+        _denied(e)
 
 
 @app.get("/api/architecture")
@@ -276,8 +368,7 @@ def architecture():
 
 
 @app.post("/api/reset")
-def reset(x_user: str | None = Header(None)):
-    u = user(x_user)
+def reset(u: dict = Depends(current_user)):
     ok, why = authz.user_can(u, "ResetDemo", "Ledger", "main", {})
     if not ok:
         raise HTTPException(403, f"{u['name']} may not reset the platform. {why}")
@@ -287,11 +378,40 @@ def reset(x_user: str | None = Header(None)):
     return {"ok": True}
 
 
+@app.get("/api/agents")
+def agents_page():
+    """The roster with what each agent has cost this tenant, and the autonomy every country has granted."""
+    spend = {r["agent"]: r for r in gateway.spend_by(world.current_tenant(), "agent")}
+    return {"agents": [a | {"calls": int(spend[a["id"]]["calls"]) if a["id"] in spend else 0,
+                            "cost_usd": float(spend[a["id"]]["cost_usd"]) if a["id"] in spend else 0.0} for a in world.agents()],
+            "autonomy": {c["code"]: cases.autonomy_setting(c["code"]) for c in world.products()["country"]},
+            "guardian": guardian.override_rates(), "proposals": proposals()}
+
+
+@app.get("/api/guardian")
+def guardian_status():
+    return guardian.override_rates()
+
+
+@app.get("/api/proposals")
+def proposals():
+    return [d for d in store.scan("mi-proposals") if d["kind"] != "correction"]
+
+
+@app.post("/api/proposals/refresh")
+def refresh_proposals():
+    return improver.propose()
+
+
+app.include_router(v1.router)
+app.mount("/mcp", mcp_server.mount)
+
 if DIST.exists():
-    app.mount("/_astro", StaticFiles(directory=DIST / "_astro"), name="astro") if (DIST / "_astro").exists() else None
+    app.mount("/_next", StaticFiles(directory=DIST / "_next"), name="next") if (DIST / "_next").exists() else None
     app.mount("/fonts", StaticFiles(directory=DIST / "fonts"), name="fonts") if (DIST / "fonts").exists() else None
 
-    @app.get("/{page:path}")
+    # HEAD too: the console's links prefetch their pages with it
+    @app.api_route("/{page:path}", methods=["GET", "HEAD"])
     def page(page: str):
         f = DIST / page / "index.html" if not page.endswith(".html") else DIST / page
         if not f.exists():
@@ -299,3 +419,4 @@ if DIST.exists():
         if not f.resolve().is_relative_to(DIST.resolve()):
             raise HTTPException(404)
         return FileResponse(f)
+

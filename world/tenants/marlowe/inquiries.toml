@@ -1,0 +1,9 @@
+[[inquiry]]
+id = "inq-m-201"
+inbox = true
+channel = "portal"
+hcp = "hcp-m-ortiz"
+received = "2026-10-15T09:00:00Z"
+text = "What is the recommended dose of Cardiven?"
+expect = "send"
+why = "On-label and fully covered by a current block."

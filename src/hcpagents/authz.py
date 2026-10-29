@@ -3,6 +3,7 @@ policies/cedar. The app holds no role checks of its own."""
 
 from functools import cache
 
+from hcpagents import world
 from hcpagents.aws import client
 
 
@@ -22,7 +23,13 @@ def _attrs(d: dict) -> dict:
 
 
 def allowed(principal_type: str, principal_id: str, principal_attrs: dict, action: str,
-            resource_type: str, resource_id: str, resource_attrs: dict, context: dict | None = None) -> tuple[bool, str]:
+            resource_type: str, resource_id: str, resource_attrs: dict, context: dict | None = None,
+            principal_tenant: str | None = None) -> tuple[bool, str]:
+    """Ask Verified Permissions. Both sides carry a tenant so tenants.cedar can refuse any crossing:
+    the resource belongs to the tenant being served, the principal to the one it signed in under."""
+    served = world.current_tenant()
+    principal_attrs = principal_attrs | {"tenant": principal_tenant or served}
+    resource_attrs = resource_attrs | {"tenant": served}
     req = {
         "policyStoreId": _store(),
         "principal": {"entityType": principal_type, "entityId": principal_id},
@@ -43,7 +50,7 @@ def allowed(principal_type: str, principal_id: str, principal_attrs: dict, actio
 
 def user_can(user: dict, action: str, resource_type: str, resource_id: str, resource_attrs: dict) -> tuple[bool, str]:
     return allowed("User", user["id"], {"role": user["role"], "country": user["country"], "name": user["name"]},
-                   action, resource_type, resource_id, resource_attrs)
+                   action, resource_type, resource_id, resource_attrs, principal_tenant=user.get("tenant", world.DEFAULT_TENANT))
 
 
 def agent_can_call(agent: str, tool: str, country: str, product: str, case: dict) -> tuple[bool, str]:

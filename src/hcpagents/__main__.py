@@ -3,7 +3,7 @@
 import asyncio
 import sys
 
-from hcpagents import agents, cases, world
+from hcpagents import agents, cases, gateway, world
 
 
 async def main(target: str) -> None:
@@ -20,4 +20,5 @@ async def main(target: str) -> None:
 if __name__ == "__main__":
     if len(sys.argv) != 3 or sys.argv[1] != "run":
         sys.exit(__doc__)
-    asyncio.run(main(sys.argv[2]))
+    with gateway.for_live_calls():
+        asyncio.run(main(sys.argv[2]))

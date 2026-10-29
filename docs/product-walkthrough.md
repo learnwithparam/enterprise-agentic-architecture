@@ -54,7 +54,7 @@ so a demo costs nothing and gives the same result every time.
 2. The inbox and five cases, one per route.
 3. The review bench and HCP 360.
 4. The moments the platform says no to a human.
-5. The proof Compliance checks.
+5. The agents, the releases and the proof Compliance checks.
 
 ## 1. How it is built
 
@@ -194,7 +194,7 @@ block marked Not current with who withdrew it, and the toast "Withdrawn. Drafts 
 ### Approval blocked at send
 
 **Switch persona** to Dr. Lena Brandt, German reviewer. **Go to** `/case?id=inq-103` and press **Approve and
-send**. **Show** the two renal sentences marked withdrawn and the toast "Send blocked: the draft no longer
+send**, then enter the demo password in the signature dialog and press **Sign and send**. **Show** the two renal sentences marked withdrawn and the toast "Send blocked: the draft no longer
 matches current content". Only Reject is offered now.
 
 **Say:** "Even a human approval cannot send stale content. The check runs again at the instant of sending
@@ -212,7 +212,28 @@ Permissions: DENY".
 
 ![Wrong country reviewer](./product-walkthrough-shots/wrong-country-reviewer-desktop.webp)
 
-## 5. The proof Compliance checks
+## 5. The agents, the releases and the proof Compliance checks
+
+### Agents
+
+**Go to** `/agents`. **Show** the roster: each agent's goal, what it perceives, what it does alone, what it
+only proposes and what it never does, with the model class, calls and cost from the AI gateway's spend log.
+Then the autonomy by country and the proposals the improver wrote.
+
+**Say:** "Eight agents, and one rule: an agent acts alone only in the direction that lowers risk. Anything
+that raises exposure is a proposal."
+
+![Agents](./product-walkthrough-shots/agents-desktop.webp)
+
+### Releases
+
+**Go to** `/releases`. **Show** one column per release with the gate result, each metric beside the last
+release, and below it how live cases behaved under each release.
+
+**Say:** "A release pins prompts, router, retrieval and policy. Safety numbers are absolute; quality and cost
+are compared with the baseline, so you can see whether each release improved."
+
+![Releases](./product-walkthrough-shots/releases-desktop.webp)
 
 ### Proof
 

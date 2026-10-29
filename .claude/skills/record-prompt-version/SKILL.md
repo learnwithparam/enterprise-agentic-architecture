@@ -8,9 +8,9 @@ description: Change an agent's system prompt or schema and ship it as a release,
 A prompt change is a release. The eval gate decides whether it ships, on recordings made with the new
 prompt.
 
-1. Edit the agent's `system` or `schema` in `src/hcpagents/agents.AGENTS`. Do not change `MODEL`; the
-   repository runs on `claude-haiku-5-5` only, and the hook in `.claude/hooks/haiku_only.py` refuses
-   any other id.
+1. Edit the agent's `system` or `schema` in `src/hcpagents/agents.AGENTS`. Do not add a model; the
+   repository runs on `claude-haiku-5-5` and `claude-sonnet-5-5` only, and the hook in
+   `.claude/hooks/model_allowlist.py` refuses any other id.
 2. Bump `PROMPT_VERSION` in `src/hcpagents/agents.py` to today's date and a sequence number.
 3. `make up`, then `make record`. This calls Haiku 5.5 for every inquiry, about two cents in total, with
    the spend cap in `policies/autonomy.toml` stopping anything larger.

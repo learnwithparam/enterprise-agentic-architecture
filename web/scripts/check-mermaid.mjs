@@ -5,7 +5,7 @@ import { join, relative } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const root = new URL('../..', import.meta.url).pathname;
-const skip = new Set(['node_modules', '.venv', '.git', 'dist', '$S']);
+const skip = new Set(['node_modules', '.venv', '.git', 'dist', '.next', '$S']);
 const files = [];
 const walk = (dir) => {
   for (const e of readdirSync(dir, { withFileTypes: true })) {

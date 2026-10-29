@@ -1,9 +1,14 @@
 .venv/
+# Secrets: the Anthropic key lives here. This repo is public. Only the example file is tracked.
+.env
+.env.*
+!.env.example
 __pycache__/
 .pytest_cache/
 node_modules/
 web/dist/
-web/.astro/
+web/.next/
 *.log
 # A scratch Claude config dir created by mistake while testing isolation. Never commit it.
 /$S/
+cdk.out/

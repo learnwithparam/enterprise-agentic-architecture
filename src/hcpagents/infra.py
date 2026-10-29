@@ -10,19 +10,14 @@ import sys
 
 from botocore.exceptions import ClientError
 
-from hcpagents import graph, world
+from hcpagents import auth, cache, db, graph, ingest, retrieval, store, world
 from hcpagents.aws import REGION, client
 
-TABLES = {
-    "mi-content": ("id", None),
-    "mi-cases": ("id", None),
-    "mi-hcp": ("id", None),
-    "mi-touches": ("id", None),
-    "mi-ledger": ("chain", "seq"),
-}
+TABLES = {"mi-ledger": ("chain", "seq")}  # everything else lives in Postgres (db.py)
 ARCHIVE = "mi-ledger-archive"
 BUS = "mi-events"
-QUEUES = {"mi-pv-intake": "SafetySignal", "mi-medical-review": "ReviewNeeded", "mi-content-invalidation": "ContentWithdrawn"}
+QUEUES = {"mi-pv-intake": "SafetySignal", "mi-medical-review": "ReviewNeeded", "mi-content-invalidation": "ContentWithdrawn",
+          "mi-interactions": "InteractionReceived"}
 KEY_ALIAS = "alias/mi-ledger"
 MACHINE = "mi-inquiry-graph"
 LOG_GROUP = "/mi/agents"
@@ -131,14 +126,24 @@ def users():
             {"Name": "country", "AttributeDataType": "String", "Mutable": True},
         ])["UserPool"]["Id"]
         ssm.put_parameter(Name="/mi/cognito/pool", Value=pool, Type="String", Overwrite=True)
-    for u in world.people():
-        if _exists(lambda: idp.admin_get_user(UserPoolId=pool, Username=u["id"])):
-            continue
-        idp.admin_create_user(UserPoolId=pool, Username=u["id"], MessageAction="SUPPRESS", UserAttributes=[
-            {"Name": "name", "Value": u["name"]},
-            {"Name": "custom:role", "Value": u["role"]},
-            {"Name": "custom:country", "Value": u["country"]},
-        ])
+    try:
+        client_id = ssm.get_parameter(Name="/mi/cognito/client")["Parameter"]["Value"]
+    except ClientError:
+        client_id = idp.create_user_pool_client(UserPoolId=pool, ClientName="mi-console", GenerateSecret=False,
+            ExplicitAuthFlows=["ALLOW_ADMIN_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"])["UserPoolClient"]["ClientId"]
+        ssm.put_parameter(Name="/mi/cognito/client", Value=client_id, Type="String", Overwrite=True)
+    for u in world.directory():
+        if not _exists(lambda: idp.admin_get_user(UserPoolId=pool, Username=u["id"])):
+            _create_user(idp, pool, u)
+        idp.admin_set_user_password(UserPoolId=pool, Username=u["id"], Password=auth.DEMO_PASSWORD, Permanent=True)
+
+
+def _create_user(idp, pool: str, u: dict):
+    idp.admin_create_user(UserPoolId=pool, Username=u["id"], MessageAction="SUPPRESS", UserAttributes=[
+        {"Name": "name", "Value": u["name"]},
+        {"Name": "custom:role", "Value": u["role"]},
+        {"Name": "custom:country", "Value": u["country"]},
+    ])
 
 
 def machine() -> str:
@@ -160,12 +165,6 @@ def logs():
         cw.create_log_stream(logGroupName=LOG_GROUP, logStreamName="cases")
 
 
-def _put_all(table: str, items: list[dict]):
-    ddb = client("dynamodb")
-    for it in items:
-        ddb.put_item(TableName=table, Item={"id": {"S": it["id"]}, "doc": {"S": json.dumps(it, ensure_ascii=False)}})
-
-
 def _clear(table: str):
     ddb = client("dynamodb")
     pk, sk = TABLES[table]
@@ -179,23 +178,34 @@ def seed(reset: bool = False):
     if reset:
         for t in TABLES:
             _clear(t)
+        db.wipe()
         from hcpagents import ledger
         ledger.new_epoch()
         sqs = client("sqs")
         for q in QUEUES:
             sqs.purge_queue(QueueUrl=sqs.get_queue_url(QueueName=q)["QueueUrl"])
-    ddb = client("dynamodb")
-    if reset or not ddb.scan(TableName="mi-content", Limit=1)["Items"]:
-        _put_all("mi-content", world.blocks())
-        _put_all("mi-hcp", world.hcp_world()["hcp"])
-        touches = [{"id": f"touch-{i}", "status": "done", **t} for i, t in enumerate(world.hcp_world()["touch"])]
-        planned = [{"status": "planned", **p} for p in world.hcp_world()["planned"]]
-        _put_all("mi-touches", touches + planned)
+    for t in world.tenants():
+        with world.as_tenant(t["id"]):
+            _seed_tenant(reset)
+
+
+def _seed_tenant(reset: bool):
+    if reset or not store.scan("mi-content"):
+        for table, docs in (("mi-content", world.blocks()), ("mi-hcp", world.hcp_world()["hcp"])):
+            for d in docs:
+                store.put(table, d)
+        touches = [{"id": f"touch-{i}", "status": "done", **t} for i, t in enumerate(world.hcp_world().get("touch", []))]
+        planned = [{"status": "planned", **p} for p in world.hcp_world().get("planned", [])]
+        for t in touches + planned:
+            store.put("mi-touches", t)
+        retrieval.index()
 
 
 def provision(reset: bool = False):
+    db.migrate()
     tables()
     archive()
+    ingest.landing()
     signing_key()
     events()
     autonomy(reset)
@@ -204,6 +214,8 @@ def provision(reset: bool = False):
     machine()
     logs()
     seed(reset)
+    if reset:
+        cache.flush_tenant("*")  # a reset reseeds every tenant, so every cached answer is stale
 
 
 if __name__ == "__main__":

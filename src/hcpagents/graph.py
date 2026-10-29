@@ -1,16 +1,15 @@
 """The inquiry graph: an ordered routing table and the deterministic engine that walks it.
 
-The model never chooses a route. Each node establishes facts; after every node the engine walks
+The model never chooses a route. Each node establishes facts; after every node `decide` walks
 ROUTING in order and stops at the first rule whose fact is still unknown (wait for more nodes) or
-whose fact matches (that is the route). If every rule passes, the reply is sent.
+whose fact matches (that is the route). If every rule passes, the reply is sent. The kernel (kernel.py)
+runs the nodes and refuses any step or route this table does not allow.
 
 The same table generates the Step Functions definition deployed to Floci. Tests walk every
 combination of facts through decide(), and run one case per rule through Step Functions to prove the two agree.
 """
 
-from collections.abc import Awaitable, Callable
 from itertools import product as cartesian
-import time
 
 # (fact, value that triggers the route, route, why). Order is the policy: safety first.
 ROUTING: list[tuple[str, object, str, str]] = [
@@ -59,28 +58,6 @@ def decide(facts: dict) -> dict | None:
         if facts[fact] == value:
             return {"route": route, "rule": i, "fact": fact, "why": why}
     return {"route": SEND[0], "rule": len(ROUTING), "fact": None, "why": SEND[1]}
-
-
-Node = Callable[[dict], Awaitable[dict]]
-
-
-async def run(impls: dict[str, Node], ctx: dict) -> dict:
-    """Run nodes in order until a route is decided. Each node returns {"facts": {...}, ...detail}."""
-    facts: dict = {}
-    trace: list[dict] = []
-    for name, produces in NODES:
-        start = time.perf_counter()
-        out = await impls[name](ctx)
-        missing = set(produces) - set(out["facts"])
-        if missing:
-            raise ValueError(f"node {name} did not establish {sorted(missing)}")
-        facts.update(out["facts"])
-        ctx.setdefault("facts", {}).update(out["facts"])
-        trace.append({"node": name, "ms": round((time.perf_counter() - start) * 1000, 1), **out})
-        decision = decide(facts)
-        if decision:
-            return {"decision": decision, "facts": facts, "trace": trace}
-    raise RuntimeError("graph finished without a decision")
 
 
 def asl() -> dict:

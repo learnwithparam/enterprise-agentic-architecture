@@ -20,10 +20,14 @@ uv run python -m hcpagents.infra --reset
 uv run uvicorn hcpagents.api:app --port 8765 > "$work/serve.log" 2>&1 &
 server=$!
 trap 'kill "$server" 2> /dev/null || true; wait "$server" 2> /dev/null || true' EXIT
-for _ in $(seq 1 60); do curl -sf -o /dev/null -H "X-User: u-raman" localhost:8765/api/meta && break; sleep 1; done
-for id in $(curl -sf -H "X-User: u-raman" localhost:8765/api/inquiries | uv run python -c "import json,sys; print(' '.join(i['id'] for i in json.load(sys.stdin)))"); do
-  curl -sf -o /dev/null -H "X-User: u-raman" -X POST "localhost:8765/api/inquiries/$id/run"
+for _ in $(seq 1 60); do curl -sf -o /dev/null -X POST -H "Content-Type: application/json" -d '{"user":"u-raman","password":"'"${MI_DEMO_PASSWORD:-local-demo-only}"'"}' localhost:8765/api/login && break; sleep 1; done
+token=$(curl -sf -X POST -H "Content-Type: application/json" -d '{"user":"u-raman","password":"'"${MI_DEMO_PASSWORD:-local-demo-only}"'"}' localhost:8765/api/login | uv run python -c "import json,sys; print(json.load(sys.stdin)['token'])")
+for id in $(curl -sf -H "Authorization: Bearer $token" localhost:8765/api/inquiries | uv run python -c "import json,sys; print(' '.join(i['id'] for i in json.load(sys.stdin)))"); do
+  curl -sf -o /dev/null -H "Authorization: Bearer $token" -X POST "localhost:8765/api/inquiries/$id/run"
 done
+
+# the releases screen compares evaluated releases, so run the gate once (replay, free)
+uv run python -m hcpagents.evals > /dev/null
 
 node web/scripts/capture.mjs "$work/shots"
 [ -n "${WALKTHROUGH_SCREENS:-}" ] || rm -f "$shots"/*.webp

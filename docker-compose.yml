@@ -1,5 +1,7 @@
 # Floci emulates the AWS services the platform uses, on one port. The Docker socket lets it start
-# its Cedar sidecar for Verified Permissions.
+# its Cedar sidecar for Verified Permissions. Postgres holds the platform's documents and vectors. Temporal holds the durable history of every case.
+# Valkey caches retrieval results; the platform works without it, only slower (ADR 0018).
+# The credentials are local-only demo values; production reads them from Secrets Manager.
 services:
   floci:
     image: floci/floci:2.3.0
@@ -7,3 +9,39 @@ services:
       - "4566:4566"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+  postgres:
+    image: pgvector/pgvector:0.8.1-pg17
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: hcp_owner
+      POSTGRES_PASSWORD: hcp_owner
+      POSTGRES_DB: hcp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hcp_owner -d hcp"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  temporal:
+    image: temporalio/temporal:1.9.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--headless"]
+    ports:
+      - "7233:7233"
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "localhost:7233"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  phoenix:
+    image: arizephoenix/phoenix:version-20.22.0
+    ports:
+      - "6006:6006"
+  valkey:
+    image: valkey/valkey:8.1.10-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

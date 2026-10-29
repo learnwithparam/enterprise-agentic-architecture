@@ -1,0 +1,24 @@
+# Synthetic. Marlowe Therapeutics and Cardiven are invented, a second client on the same platform.
+# None of this is real labelling and none of it is medical advice.
+
+company = "Marlowe Therapeutics"
+
+[[product]]
+code = "CAR"
+brand = "Cardiven"
+generic = "carvedrenol"
+form = "5 mg tablets"
+
+[[scope]]
+product = "CAR"
+country = "US"
+populations = ["adult"]
+indications = ["other"]
+
+[[country]]
+code = "US"
+name = "United States"
+regulator = "FDA"
+promo_cap_30d = 3
+email_consent = "opt_out"
+ai_disclosure = "TPL-AI-US"

@@ -1,0 +1,54 @@
+# Synthetic approved content for Marlowe Therapeutics. Nothing here is visible to another tenant.
+
+[[block]]
+id = "TPL-OPEN"
+product = "ALL"
+country = "ALL"
+topic = "template"
+version = 1
+status = "approved"
+approved_on = "2026-03-01"
+expires_on = "2027-12-31"
+mlr_ref = "MLR-M-0001"
+source = "Marlowe response standard, section 1"
+text = "Thank you for your request to Marlowe Medical Information."
+
+[[block]]
+id = "TPL-CLOSE"
+product = "ALL"
+country = "ALL"
+topic = "template"
+version = 1
+status = "approved"
+approved_on = "2026-03-01"
+expires_on = "2027-12-31"
+mlr_ref = "MLR-M-0001"
+source = "Marlowe response standard, section 1"
+text = "This response is provided in reply to your unsolicited request and is intended for healthcare professionals only."
+
+[[block]]
+id = "TPL-AI-US"
+product = "ALL"
+country = "US"
+topic = "disclosure"
+version = 1
+status = "approved"
+approved_on = "2026-07-01"
+expires_on = "2027-06-30"
+mlr_ref = "MLR-M-0002"
+source = "Marlowe response standard, section 4"
+text = "This response was prepared with the help of an AI system and checked against approved content."
+
+[[block]]
+id = "CAR-US-DOSE"
+product = "CAR"
+country = "US"
+topic = "dosing"
+population = "adult"
+version = 1
+status = "approved"
+approved_on = "2026-04-10"
+expires_on = "2027-04-09"
+mlr_ref = "MLR-M-0044"
+source = "Synthetic label, section 2"
+text = "The recommended dose of Cardiven is 5 mg taken orally once daily."

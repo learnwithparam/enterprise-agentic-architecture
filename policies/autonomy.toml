@@ -12,3 +12,9 @@ JP = []
 [budget]
 per_case_usd = 0.01
 per_session_usd = 0.10
+
+# The guardian lowers a country's automatic replies when reviewers reject too many AI drafts there.
+# Only a human raises it again, and the count starts again from that moment.
+[guardian]
+min_decisions = 5
+max_override_rate = 0.4

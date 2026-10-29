@@ -1,0 +1,8 @@
+# The client companies on the platform. Every row of data belongs to exactly one.
+[[tenant]]
+id = "quillon"
+name = "Quillon Biopharma"
+
+[[tenant]]
+id = "marlowe"
+name = "Marlowe Therapeutics"

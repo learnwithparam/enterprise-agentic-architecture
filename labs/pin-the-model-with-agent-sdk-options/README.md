@@ -21,8 +21,8 @@ make lab N=pin-the-model-with-agent-sdk-options
 
 ## Read
 
-- `src/hcpagents/agents.py`: `MODEL`, `PRICE`, `_options`, `check_models`, `recording_key`, `Spend`.
-- `docs/adr/0007-haiku-only-and-isolated.md` and `docs/adr/0006-replay-recordings.md`.
+- `src/hcpagents/agents.py`: `ALLOWED_MODELS`, `PRICES`, `_options`, `check_models`, `recording_key`, `Spend`.
+- `docs/adr/0007-model-allowlist-and-isolated.md` and `docs/adr/0006-replay-recordings.md`.
 
 ## What the test proves
 

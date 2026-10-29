@@ -3,7 +3,8 @@
 Every entry carries the hash of the one before it. Each entry is also written to an S3 bucket
 under Object Lock in COMPLIANCE mode, which nobody can delete for ten years, and the chain head is
 signed with a KMS key at each checkpoint. Editing a row in DynamoDB breaks the chain at that row;
-deleting the archived copy is refused by S3.
+deleting the archived copy is refused by S3. Each tenant has its own chain, and personal data in an entry
+is sealed under a per-person key (privacy.py), so erasing a person never touches the chain.
 """
 
 import hashlib
@@ -12,6 +13,7 @@ from datetime import UTC, datetime
 
 from botocore.exceptions import ClientError
 
+from hcpagents import privacy, world
 from hcpagents.aws import client
 from hcpagents.infra import ARCHIVE, KEY_ALIAS
 
@@ -34,6 +36,14 @@ def new_epoch() -> str:
     return epoch
 
 
+def _chain() -> str:
+    return f"{_epoch()}#{world.current_tenant()}"
+
+
+def _archive_key(chain: str, seq: int) -> str:
+    return f"ledger/{chain.replace('#', '/')}/{seq:08d}.json"
+
+
 def digest(prev: str, entry: dict) -> str:
     return hashlib.sha256((prev + json.dumps(entry, sort_keys=True, ensure_ascii=False)).encode()).hexdigest()
 
@@ -41,7 +51,7 @@ def digest(prev: str, entry: dict) -> str:
 def _rows() -> list[dict]:
     ddb = client("dynamodb")
     rows, kw = [], {"TableName": TABLE, "KeyConditionExpression": "chain = :c",
-                    "ExpressionAttributeValues": {":c": {"S": _epoch()}}, "ConsistentRead": True}
+                    "ExpressionAttributeValues": {":c": {"S": _chain()}}, "ConsistentRead": True}
     while True:
         page = ddb.query(**kw)
         rows += [{"seq": int(i["seq"]["N"]), "hash": i["hash"]["S"], "prev": i["prev"]["S"],
@@ -52,15 +62,20 @@ def _rows() -> list[dict]:
         kw["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
 
-def entries(case_id: str | None = None) -> list[dict]:
-    rows = _rows()
-    return [r for r in rows if case_id is None or r["entry"].get("case") == case_id]
+def entries(case_id: str | None = None, reveal: bool = False) -> list[dict]:
+    """This tenant's rows. Sealed personal data stays sealed unless the caller is allowed to open it."""
+    rows = [r for r in _rows() if case_id is None or r["entry"].get("case") == case_id]
+    return [r | {"entry": privacy.reveal(r["entry"])} for r in rows] if reveal else rows
 
 
-def append(entry: dict) -> dict:
-    """Append with an optimistic lock on the sequence number, so two writers cannot fork the chain."""
-    ddb, epoch = client("dynamodb"), _epoch()
+def append(entry: dict, subject: str | None = None, private: dict | None = None) -> dict:
+    """Append with an optimistic lock on the sequence number, so two writers cannot fork the chain.
+
+    `private` is personal data about `subject`; it is written sealed, never as text."""
+    ddb, epoch = client("dynamodb"), _chain()
     entry = {"at": datetime.now(UTC).isoformat(timespec="milliseconds"), **entry}
+    if private is not None:
+        entry |= privacy.seal(subject, private)
     for _ in range(5):
         last = ddb.query(TableName=TABLE, KeyConditionExpression="chain = :c", ScanIndexForward=False, Limit=1,
                          ExpressionAttributeValues={":c": {"S": epoch}}, ConsistentRead=True)["Items"]
@@ -77,7 +92,7 @@ def append(entry: dict) -> dict:
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
                 continue
             raise
-        client("s3").put_object(Bucket=ARCHIVE, Key=f"ledger/{epoch}/{seq:08d}.json",
+        client("s3").put_object(Bucket=ARCHIVE, Key=_archive_key(epoch, seq),
                                 Body=json.dumps({"seq": seq, "hash": h, "prev": prev, "entry": entry}).encode())
         return {"seq": seq, "hash": h}
     raise RuntimeError("ledger append lost the race five times")
@@ -115,7 +130,7 @@ def verify() -> dict:
 
 def tamper(seq: int, field: str = "route", value: str = "send") -> dict:
     """Demo: rewrite one stored entry the way an insider with table access would."""
-    ddb, epoch = client("dynamodb"), _epoch()
+    ddb, epoch = client("dynamodb"), _chain()
     key = {"chain": {"S": epoch}, "seq": {"N": str(seq)}}
     item = ddb.get_item(TableName=TABLE, Key=key)["Item"]
     entry = json.loads(item["entry"]["S"])
@@ -128,8 +143,8 @@ def tamper(seq: int, field: str = "route", value: str = "send") -> dict:
 
 def restore(seq: int) -> None:
     """Undo a demo tamper from the locked archive copy, which is the record of truth."""
-    epoch = _epoch()
-    body = json.loads(client("s3").get_object(Bucket=ARCHIVE, Key=f"ledger/{epoch}/{seq:08d}.json")["Body"].read())
+    epoch = _chain()
+    body = json.loads(client("s3").get_object(Bucket=ARCHIVE, Key=_archive_key(epoch, seq))["Body"].read())
     client("dynamodb").update_item(
         TableName=TABLE, Key={"chain": {"S": epoch}, "seq": {"N": str(seq)}}, UpdateExpression="SET #e = :e",
         ExpressionAttributeNames={"#e": "entry"},
@@ -138,10 +153,18 @@ def restore(seq: int) -> None:
 
 def try_delete_archive(seq: int) -> dict:
     """Demo: try to destroy the archived copy of an entry. Object Lock refuses."""
-    s3, key = client("s3"), f"ledger/{_epoch()}/{seq:08d}.json"
+    s3, key = client("s3"), _archive_key(_chain(), seq)
     version = s3.head_object(Bucket=ARCHIVE, Key=key)["VersionId"]
     try:
         s3.delete_object(Bucket=ARCHIVE, Key=key, VersionId=version)
         return {"deleted": True, "key": key}
     except ClientError as e:
         return {"deleted": False, "key": key, "error": e.response["Error"]["Code"], "message": e.response["Error"].get("Message", "")}
+
+
+def erase_subject(subject: str, by: str) -> dict:
+    """Erase one person: delete their key, then record that it happened (the record names no one)."""
+    pid = privacy.pseudonym(subject)
+    found = privacy.erase(subject)
+    append({"type": "erased", "subject": pid, "by": by, "had_data": found})
+    return {"subject": pid, "erased": found}

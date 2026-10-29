@@ -1,0 +1,60 @@
+# Questions with the one block that answers each. Synthetic. Used by the retrieval eval (ADR 0012).
+# `forbidden` lists blocks that look relevant but sit outside the facet gate (withdrawn, expired, wrong country).
+
+[[case]]
+id = "r-dose"
+query = "How much Veltrona should a patient take each day?"
+product = "VEL"
+country = "US"
+answer = "VEL-US-DOSE"
+
+[[case]]
+id = "r-forgot"
+query = "What should a patient do after forgetting a tablet?"
+product = "VEL"
+country = "US"
+answer = "VEL-US-MISS"
+
+[[case]]
+id = "r-kidney"
+query = "Is a lower dose needed for patients with kidney disease?"
+product = "VEL"
+country = "US"
+answer = "VEL-US-RENAL"
+
+[[case]]
+id = "r-food"
+query = "Can the tablets be taken with a meal?"
+product = "VEL"
+country = "US"
+answer = "VEL-US-ADMIN"
+
+[[case]]
+id = "r-german-storage"
+query = "Wie sollen die Tabletten gelagert werden?"
+product = "VEL"
+country = "DE"
+answer = "VEL-DE-STOR3"
+forbidden = ["VEL-DE-STOR"]
+
+[[case]]
+id = "r-german-pregnancy"
+query = "Darf Veltrona in der Schwangerschaft eingesetzt werden?"
+product = "VEL"
+country = "DE"
+answer = "VEL-DE-PREG"
+
+[[case]]
+id = "r-inhaler"
+query = "How often should the inhaler mouthpiece be cleaned?"
+product = "OMB"
+country = "US"
+answer = "OMB-US-CARE"
+
+[[case]]
+id = "r-expired"
+query = "Does Ombrexa interact with strong CYP3A4 inhibitors in Japan?"
+product = "OMB"
+country = "JP"
+answer = ""
+forbidden = ["OMB-JP-INTER", "OMB-US-INTER"]

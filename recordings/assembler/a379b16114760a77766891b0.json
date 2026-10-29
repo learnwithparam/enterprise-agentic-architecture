@@ -1,0 +1,50 @@
+{
+ "output": {
+  "answers": [
+   {
+    "question": "What is the Veltrona dose for psoriatic arthritis?",
+    "block_ids": [
+     "VEL-JP-PSA"
+    ]
+   }
+  ],
+  "uncovered": []
+ },
+ "tool_calls": [
+  {
+   "tool": "mcp__mi__search_approved_content",
+   "input": {
+    "product": "VEL",
+    "country": "JP",
+    "query": "What is the Veltrona dose for psoriatic arthritis?"
+   },
+   "allowed": true,
+   "reason": "Verified Permissions: ALLOW (agents.cedar)",
+   "returned": [
+    "VEL-JP-PSA",
+    "VEL-JP-DOSE",
+    "ISI-VEL-JP",
+    "VEL-JP-ADMIN"
+   ]
+  }
+ ],
+ "usage": {
+  "input_tokens": 4,
+  "output_tokens": 316,
+  "cache_read_input_tokens": 2550,
+  "cache_creation_input_tokens": 1103
+ },
+ "model_usage": {
+  "claude-haiku-5-5": {
+   "inputTokens": 4,
+   "outputTokens": 316
+  }
+ },
+ "cost_usd": 0.000405,
+ "agent": "assembler",
+ "key": "a379b16114760a77766891b0",
+ "prompt_version": "2026-10-29.1",
+ "model": "claude-haiku-5-5",
+ "user_prompt": "{\"product\": \"VEL\", \"country\": \"JP\", \"questions\": [{\"text\": \"What is the Veltrona dose for psoriatic arthritis?\", \"topic\": \"dosing\"}]}",
+ "recorded_at": "2026-10-29T14:54:46+00:00"
+}

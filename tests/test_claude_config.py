@@ -8,11 +8,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-HOOK = ROOT / ".claude/hooks/haiku_only.py"
+HOOK = ROOT / ".claude/hooks/model_allowlist.py"
 
-spec = importlib.util.spec_from_file_location("haiku_only", HOOK)
-haiku_only = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(haiku_only)
+spec = importlib.util.spec_from_file_location("model_allowlist", HOOK)
+model_allowlist = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(model_allowlist)
 
 
 def run_hook(tool_input: dict) -> subprocess.CompletedProcess:
@@ -20,22 +20,23 @@ def run_hook(tool_input: dict) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(HOOK)], input=json.dumps(event), capture_output=True, text=True)
 
 
-def test_the_hook_blocks_another_model_in_source():
+def test_the_hook_blocks_a_model_off_the_allowlist_in_source():
     r = run_hook({"file_path": str(ROOT / "src/hcpagents/agents.py"), "old_string": "x",
-                  "new_string": 'MODEL = "claude-sonnet-5-5"'})
+                  "new_string": 'MODEL = "claude-opus-5-5"'})
     assert r.returncode == 2
-    assert "claude-sonnet-5-5" in r.stderr
+    assert "claude-opus-5-5" in r.stderr
 
 
 def test_the_hook_blocks_a_dated_model_id_in_a_multi_edit():
-    r = run_hook({"file_path": str(ROOT / "web/src/pages/index.astro"),
+    r = run_hook({"file_path": str(ROOT / "web/app/page.jsx"),
                   "edits": [{"old_string": "a", "new_string": "claude-haiku-4-5-20251001"}]})
     assert r.returncode == 2
 
 
-def test_the_hook_allows_haiku_5_5():
-    r = run_hook({"file_path": str(ROOT / "src/hcpagents/agents.py"), "content": 'MODEL = "claude-haiku-5-5"'})
-    assert r.returncode == 0, r.stderr
+def test_the_hook_allows_haiku_5_5_and_sonnet_5_5():
+    for model in ("claude-haiku-5-5", "claude-sonnet-5-5"):
+        r = run_hook({"file_path": str(ROOT / "src/hcpagents/agents.py"), "content": f'MODEL = "{model}"'})
+        assert r.returncode == 0, r.stderr
 
 
 def test_the_hook_allows_other_models_as_examples_in_tests_and_docs():
@@ -48,17 +49,17 @@ def test_settings_wire_the_hook_on_every_file_edit_tool():
     settings = json.loads((ROOT / ".claude/settings.json").read_text())
     (entry,) = settings["hooks"]["PreToolUse"]
     assert set(entry["matcher"].split("|")) == {"Edit", "Write", "MultiEdit"}
-    assert entry["hooks"][0]["command"].endswith(".claude/hooks/haiku_only.py")
+    assert entry["hooks"][0]["command"].endswith(".claude/hooks/model_allowlist.py")
 
 
-def test_every_model_id_in_guarded_code_is_haiku_5_5():
+def test_every_model_id_in_guarded_code_is_on_the_allowlist():
     seen = 0
-    for top in haiku_only.GUARDED:
+    for top in model_allowlist.GUARDED:
         for f in (ROOT / top).rglob("*"):
-            if f.is_file() and f.suffix in {".py", ".toml", ".json", ".astro", ".ts", ".mjs", ".cedar", ".js"}:
+            if f.is_file() and f.suffix in {".py", ".toml", ".json", ".jsx", ".mjs", ".cedar", ".js"}:
                 text = f.read_text(errors="ignore")
-                seen += text.count(haiku_only.ALLOWED)
-                assert not haiku_only.offending(text), f
+                seen += sum(text.count(m) for m in model_allowlist.ALLOWED)
+                assert not model_allowlist.offending(text), f
     assert seen > 0
 
 

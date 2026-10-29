@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = [*ROOT.glob("*.md"), *ROOT.glob("docs/**/*.md"), *ROOT.glob("labs/**/*.md"), *ROOT.glob(".claude/**/*.md"), *ROOT.glob("web/src/**/*.astro"),
-         *ROOT.glob("web/src/**/*.ts"), *ROOT.glob("world/*.toml")]
+FILES = [*ROOT.glob("*.md"), *ROOT.glob("docs/**/*.md"), *ROOT.glob("labs/**/*.md"), *ROOT.glob(".claude/**/*.md"), *ROOT.glob("web/app/**/*.jsx"),
+         *ROOT.glob("web/components/**/*.jsx"), *ROOT.glob("web/lib/*.js"), *ROOT.glob("world/*.toml")]
 BANNED = re.compile(r"[—–]|\b(delve|seamless(ly)?|leverag(e|ing)|robust|cutting-edge|game-?changer|unlock(s|ing)?|empower(s|ing)?)\b", re.I)
 
 

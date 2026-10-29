@@ -1,0 +1,50 @@
+{
+ "output": {
+  "answers": [
+   {
+    "question": "What dose of Veltrona is used in a 15 year old weighing 52 kg?",
+    "block_ids": [
+     "VEL-US-PED"
+    ]
+   }
+  ],
+  "uncovered": []
+ },
+ "tool_calls": [
+  {
+   "tool": "mcp__mi__search_approved_content",
+   "input": {
+    "product": "VEL",
+    "country": "US",
+    "query": "What dose of Veltrona is used in a 15 year old weighing 52 kg?"
+   },
+   "allowed": true,
+   "reason": "Verified Permissions: ALLOW (agents.cedar)",
+   "returned": [
+    "VEL-US-PED",
+    "VEL-US-DOSE",
+    "VEL-US-RENAL",
+    "VEL-US-INTER"
+   ]
+  }
+ ],
+ "usage": {
+  "input_tokens": 4,
+  "output_tokens": 488,
+  "cache_read_input_tokens": 2555,
+  "cache_creation_input_tokens": 1193
+ },
+ "model_usage": {
+  "claude-haiku-5-5": {
+   "inputTokens": 4,
+   "outputTokens": 488
+  }
+ },
+ "cost_usd": 0.000509,
+ "agent": "assembler",
+ "key": "2ff523782d01fd7740a53d77",
+ "prompt_version": "2026-10-29.1",
+ "model": "claude-haiku-5-5",
+ "user_prompt": "{\"product\": \"VEL\", \"country\": \"US\", \"questions\": [{\"text\": \"What dose of Veltrona is used in a 15 year old weighing 52 kg?\", \"topic\": \"dosing\"}]}",
+ "recorded_at": "2026-10-29T14:54:56+00:00"
+}

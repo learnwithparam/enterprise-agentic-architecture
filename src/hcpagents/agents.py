@@ -1,4 +1,4 @@
-"""Three bounded agents on the Claude Agent SDK, all on claude-haiku-5-5 and nothing else.
+"""Three bounded agents on the Claude Agent SDK, on claude-haiku-5-5 or claude-sonnet-5-5 and nothing else.
 
 safety     finds possible adverse events and special situations, with verbatim quotes
 triage     classifies intent, product and each question's topic, population and indication
@@ -16,19 +16,33 @@ import os
 import sys
 from datetime import UTC, datetime
 
-from hcpagents import world
+from hcpagents import retrieval, router, world
 from hcpagents.guards import audit_entry, pre_tool
+from hcpagents.router import HAIKU, SONNET
 
-MODEL = "claude-haiku-5-5"
-PROMPT_VERSION = "2026-10-15.1"
-# US dollars per million tokens. The bundled CLI does not know this model's price, so its own
+MODEL = HAIKU  # the default and the small-fast model; the router escalates to SONNET
+SEARCH_RESULTS = 4  # blocks one search returns; enough to compare, few enough to read
+ALLOWED_MODELS = frozenset({HAIKU, SONNET})
+PROMPT_VERSION = "2026-10-29.1"
+# US dollars per million tokens. The bundled CLI does not know these prices, so its own
 # cost figure is wrong; this is the number the budget is enforced on.
-PRICE = {"input": 0.10, "output": 0.50, "cache_read": 0.01, "cache_write": 0.20}
+PRICES = {
+    HAIKU: {"input": 0.10, "output": 0.50, "cache_read": 0.01, "cache_write": 0.20},
+    SONNET: {"input": 2.00, "output": 10.00, "cache_read": 0.20, "cache_write": 4.00},
+}
 RECORDINGS = world.ROOT / "recordings"
 
 
 class ModelPolicyError(RuntimeError):
-    """A call used a model other than MODEL."""
+    """A call used a model outside ALLOWED_MODELS."""
+
+
+class AgentFailed(RuntimeError):
+    """A live run ended without a valid structured answer. The router may retry it on Sonnet."""
+
+
+class EscalateToHuman(RuntimeError):
+    """The router has no model left to try, or no budget for one. The case goes to review."""
 
 
 class BudgetError(RuntimeError):
@@ -43,20 +57,21 @@ def live() -> bool:
     return os.environ.get("LIVE") == "1"
 
 
-def cost_usd(usage: dict) -> float:
+def cost_usd(usage: dict, model: str = MODEL) -> float:
+    price = PRICES[model]
     return round(
-        (usage.get("input_tokens", 0) * PRICE["input"]
-         + usage.get("output_tokens", 0) * PRICE["output"]
-         + usage.get("cache_read_input_tokens", 0) * PRICE["cache_read"]
-         + usage.get("cache_creation_input_tokens", 0) * PRICE["cache_write"]) / 1_000_000,
+        (usage.get("input_tokens", 0) * price["input"]
+         + usage.get("output_tokens", 0) * price["output"]
+         + usage.get("cache_read_input_tokens", 0) * price["cache_read"]
+         + usage.get("cache_creation_input_tokens", 0) * price["cache_write"]) / 1_000_000,
         6,
     )
 
 
 def check_models(model_usage: dict | None) -> None:
-    others = sorted(set(model_usage or {}) - {MODEL})
+    others = sorted(set(model_usage or {}) - ALLOWED_MODELS)
     if others:
-        raise ModelPolicyError(f"Run used {others}; only {MODEL} is allowed")
+        raise ModelPolicyError(f"Run used {others}; only {sorted(ALLOWED_MODELS)} are allowed")
 
 
 class Spend:
@@ -141,10 +156,12 @@ AGENTS = {
         "system": (
             "You select approved content blocks that answer medical questions. You never write medical "
             "text yourself. For each question call search_approved_content with the case's product, "
-            "country and the question's topic, read the blocks returned, and choose the block ids whose "
-            "text directly answers the question. Use get_block only to reread a block. Choose only ids a "
+            "country and the question in plain words as the query. The blocks come back ranked, and the "
+            "closest block may still not answer the question, so read each one and choose the block ids "
+            "whose text directly answers it. Use get_block only to reread a block. Choose only ids a "
             "tool returned. If no returned block answers a question, list that question as uncovered. "
-            "Do not stretch a block to fit a question it does not answer."
+            "Do not stretch a block to fit a question it does not answer. If the input has a retry "
+            "list, search again for those questions using different words."
         ),
         "schema": {"type": "object", "properties": {
             "answers": {"type": "array", "items": {"type": "object", "properties": {
@@ -159,21 +176,22 @@ AGENTS = {
 }
 
 
-def recording_key(agent: str, user_prompt: str) -> str:
+# What each agent does and how risky a miss is, which is all the router needs to pick a model.
+AGENT_TASK = {"safety": ("screen", "high"), "triage": ("classify", "low"), "assembler": ("select", "low")}
+
+
+def recording_key(agent: str, user_prompt: str, model: str = MODEL) -> str:
     spec = AGENTS[agent]
-    raw = json.dumps([agent, PROMPT_VERSION, MODEL, spec["system"], spec["schema"], user_prompt], sort_keys=True)
+    raw = json.dumps([agent, PROMPT_VERSION, model, spec["system"], spec["schema"], user_prompt], sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:24]
 
 
 # ---------------------------------------------------------------- tools
 
-def search(store: dict, product: str, country: str, topic: str) -> list[dict]:
-    """Current answer blocks for a product, country and topic. Expired and withdrawn blocks are invisible."""
-    return [
-        {"block_id": b["id"], "version": b["version"], "topic": b["topic"], "text": b["text"]}
-        for b in store.values()
-        if b["product"] == product and b["country"] == country and b["topic"] == topic and world.is_current(b)
-    ]
+def search(product: str, country: str, query: str) -> list[dict]:
+    """The best current blocks for a question, from hybrid retrieval behind the facet gate (ADR 0012)."""
+    return [{k: b[k] for k in ("block_id", "version", "topic", "text")}
+            for b in retrieval.search(query, product, country, k=SEARCH_RESULTS)]
 
 
 def get_block(store: dict, block_id: str) -> list[dict]:
@@ -185,22 +203,39 @@ def get_block(store: dict, block_id: str) -> list[dict]:
 
 def run_tool(store: dict, tool: str, tool_input: dict) -> list[dict]:
     if tool == "mcp__mi__search_approved_content":
-        return search(store, tool_input.get("product", ""), tool_input.get("country", ""), tool_input.get("topic", ""))
+        return search(tool_input.get("product", ""), tool_input.get("country", ""), tool_input.get("query") or tool_input.get("topic", ""))
     return get_block(store, tool_input.get("block_id", ""))
 
 
 # ---------------------------------------------------------------- calls
 
 async def call(agent: str, user_prompt: str, case: dict, store: dict, authorize, audit) -> dict:
-    """Run one agent. Returns {output, tool_calls, usage, cost_usd, mode, key}."""
-    key = recording_key(agent, user_prompt)
+    """Run one agent on the model the router picks. Returns {output, tool_calls, usage, cost_usd, mode, key, model}.
+
+    A live run that ends without a valid answer is retried once on Sonnet; after that the case goes to a human.
+    """
+    task, risk = AGENT_TASK[agent]
+    prior: list[router.Outcome] = []
+    while True:
+        budget_left = SPEND.per_case - SPEND.cases.get(case["id"], 0.0)
+        decision = router.route(task, risk, budget_left, tuple(prior))
+        if decision.model is None:
+            raise EscalateToHuman(f"{agent}: {decision.reason}")
+        try:
+            return await _call_on(decision.model, agent, user_prompt, case, store, authorize, audit) | {"routing": decision.reason}
+        except AgentFailed:
+            prior.append(router.Outcome(decision.model, router.SCHEMA_FAILURE))
+
+
+async def _call_on(model: str, agent: str, user_prompt: str, case: dict, store: dict, authorize, audit) -> dict:
+    key = recording_key(agent, user_prompt, model)
     path = RECORDINGS / agent / f"{key}.json"
     if live():
         SPEND.check(case["id"])
-        rec = await _live(agent, user_prompt, case, store, authorize, audit)
+        rec = await _live(model, agent, user_prompt, case, store, authorize, audit)
         SPEND.add(case["id"], rec["cost_usd"])
         path.parent.mkdir(parents=True, exist_ok=True)
-        rec |= {"agent": agent, "key": key, "prompt_version": PROMPT_VERSION, "model": MODEL,
+        rec |= {"agent": agent, "key": key, "prompt_version": PROMPT_VERSION, "model": model,
                 "user_prompt": user_prompt, "recorded_at": datetime.now(UTC).isoformat(timespec="seconds")}
         path.write_text(json.dumps(rec, indent=1, ensure_ascii=False) + "\n")
         return rec | {"mode": "live"}
@@ -216,14 +251,25 @@ async def call(agent: str, user_prompt: str, case: dict, store: dict, authorize,
     return rec | {"mode": "replay"}
 
 
-def _options(agent: str, case: dict, store: dict, authorize, audit, tool_calls: list):
+def gateway_env(agent: str, case: dict) -> dict:
+    """Every live model call goes through the AI gateway with this tenant's key for this agent, never the provider key (ADR 0019)."""
+    url = os.environ.get("MI_GATEWAY")
+    if not url:
+        raise RuntimeError("Live calls go through the AI gateway: set MI_GATEWAY, or run inside `gateway.embedded()`")
+    from hcpagents import gateway
+
+    return {"ANTHROPIC_BASE_URL": url, "ANTHROPIC_API_KEY": gateway.key_for(world.current_tenant(), agent),
+            "ANTHROPIC_CUSTOM_HEADERS": f"x-mi-case: {case['id']}\nx-mi-release: {gateway.release()}\nx-mi-prompt-version: {PROMPT_VERSION}"}
+
+
+def _options(model: str, agent: str, case: dict, store: dict, authorize, audit, tool_calls: list):
     from claude_agent_sdk import ClaudeAgentOptions, HookMatcher, create_sdk_mcp_server, tool
 
     spec = AGENTS[agent]
     kw = {}
     if spec.get("tools"):
-        @tool("search_approved_content", "Search current approved content blocks for one product, country and topic.",
-              {"product": str, "country": str, "topic": str})
+        @tool("search_approved_content", "Search current approved content blocks for one product and country with a question in plain words.",
+              {"product": str, "country": str, "query": str})
         async def _search(args):
             return {"content": [{"type": "text", "text": json.dumps(run_tool(store, "mcp__mi__search_approved_content", args))}]}
 
@@ -247,7 +293,7 @@ def _options(agent: str, case: dict, store: dict, authorize, audit, tool_calls: 
             "hooks": {"PreToolUse": [HookMatcher(matcher="mcp__mi__.*", hooks=[pre])]},
         }
     return ClaudeAgentOptions(
-        model=MODEL,
+        model=model,
         system_prompt=spec["system"],
         tools=[],
         max_turns=spec["max_turns"],
@@ -262,6 +308,7 @@ def _options(agent: str, case: dict, store: dict, authorize, audit, tool_calls: 
             "ANTHROPIC_DEFAULT_HAIKU_MODEL": MODEL,
             "ANTHROPIC_SMALL_FAST_MODEL": MODEL,
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+            **gateway_env(agent, case),
         },
         # Backstop only. The CLI misprices this model, so the real cap is Spend above.
         max_budget_usd=0.5,
@@ -276,24 +323,24 @@ def _cli_stderr(line: str) -> None:
         print(line, file=sys.stderr)
 
 
-async def _live(agent: str, user_prompt: str, case: dict, store: dict, authorize, audit) -> dict:
+async def _live(model: str, agent: str, user_prompt: str, case: dict, store: dict, authorize, audit) -> dict:
     from claude_agent_sdk import ResultMessage, query
 
     tool_calls: list = []
-    opts = _options(agent, case, store, authorize, audit, tool_calls)
+    opts = _options(model, agent, case, store, authorize, audit, tool_calls)
     result = None
     async for m in query(prompt=user_prompt, options=opts):
         if isinstance(m, ResultMessage):
             result = m
     if result is None or result.subtype != "success" or result.structured_output is None:
-        raise RuntimeError(f"{agent} did not finish: {result.subtype if result else 'no result'}")
+        raise AgentFailed(f"{agent} did not finish: {result.subtype if result else 'no result'}")
     check_models(result.model_usage)
     usage = {k: (result.usage or {}).get(k, 0) for k in
              ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")}
     return {"output": result.structured_output, "tool_calls": tool_calls, "usage": usage,
             "model_usage": {k: {"inputTokens": v.get("inputTokens"), "outputTokens": v.get("outputTokens")}
                             for k, v in (result.model_usage or {}).items()},
-            "cost_usd": cost_usd(usage)}
+            "cost_usd": cost_usd(usage, model)}
 
 
 def run_sync(coro):

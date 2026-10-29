@@ -17,6 +17,9 @@ uv run pytest -q labs  # every lab; make check runs them too
 | [Guard tool calls with Cedar](guard-tool-calls-with-cedar/) | An agent reads only its own case's country and product | Yes |
 | [Prove the audit trail with a hash chain](prove-the-audit-trail-with-a-hash-chain/) | An edit to any past entry is found; the archive cannot be deleted | Partly |
 | [Gate releases with evals](gate-releases-with-evals/) | One missed adverse event fails the release | No |
-| [Pin the model with Agent SDK options](pin-the-model-with-agent-sdk-options/) | One model, nothing loaded from the machine, a bill we compute | No |
+| [Pin the model with Agent SDK options](pin-the-model-with-agent-sdk-options/) | An allowlist of two models, nothing loaded from the machine, a bill we compute | No |
+| [Pick the model with a router](pick-the-model-with-a-router/) | Haiku by default, Sonnet when asked, then a person | No |
+| [Bound agent plans with a policy kernel](bound-agent-plans-with-a-policy-kernel/) | A plan cannot skip a step, rewrite a fact or loop forever | No |
+| [Arbitrate agents with a supervisor](arbitrate-agents-with-a-supervisor/) | Policy settles two touches to one doctor, not a model | No |
 
 Read `docs/architecture-walkthrough.md` first for how the parts fit together.

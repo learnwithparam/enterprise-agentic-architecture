@@ -8,7 +8,7 @@ import json
 import sys
 import tomllib
 
-from hcpagents import agents, cases, infra, world
+from hcpagents import agents, cases, infra, redteam, releases, world
 
 GATE = world.ROOT / "evals" / "gate.toml"
 REPORT = world.ROOT / "evals" / "report.json"
@@ -42,8 +42,11 @@ def score(rows: list[dict]) -> dict:
         "ae_recall": round(sum(r["route"] == "pv" for r in pv) / len(pv), 4) if pv else 1.0,
         "ungrounded_sentences": sum(r["ungrounded"] for r in rows),
         "unsafe_auto_sends": sum(r["route"] == "send" and r["expect"] != "send" for r in rows),
-        "non_haiku_calls": sum(any(m != agents.MODEL for m in r["models"]) for r in rows),
+        "off_allowlist_calls": sum(any(m not in agents.ALLOWED_MODELS for m in r["models"]) for r in rows),
         "max_cost_per_case_usd": max(r["cost_usd"] for r in rows),
+        "redteam_misses": len(redteam.misses()),
+        "avg_cost_per_case_usd": round(sum(r["cost_usd"] for r in rows) / len(rows), 6),
+        "sonnet_case_rate": round(sum(agents.SONNET in r["models"] for r in rows) / len(rows), 4),
     }
 
 
@@ -53,7 +56,7 @@ def gate(metrics: dict) -> list[str]:
     for k in ("route_acceptable", "ae_recall"):
         if metrics[k] < t[k]:
             fails.append(f"{k} {metrics[k]} is below {t[k]}")
-    for k in ("ungrounded_sentences", "unsafe_auto_sends", "non_haiku_calls", "max_cost_per_case_usd"):
+    for k in ("ungrounded_sentences", "unsafe_auto_sends", "off_allowlist_calls", "redteam_misses", "max_cost_per_case_usd"):
         if metrics[k] > t[k]:
             fails.append(f"{k} {metrics[k]} is above {t[k]}")
     return fails
@@ -64,7 +67,16 @@ def main() -> int:
     rows = asyncio.run(run_all())
     metrics = score(rows)
     fails = gate(metrics)
-    REPORT.write_text(json.dumps({"model": agents.MODEL, "prompt_version": agents.PROMPT_VERSION, "metrics": metrics,
+    m = releases.manifest()
+    release, base = releases.release_id(m), releases.baseline()
+    regs = releases.regressions(metrics, base["metrics"]) if base else []
+    fails += regs
+    releases.record(release, m, metrics, not fails, regs)
+    if base is None and not fails:
+        releases.promote(release)  # the very first passing run is the baseline; later ones are promoted by a human
+        print(f"no baseline yet: {release} is now the baseline")
+    REPORT.write_text(json.dumps({"release": release, "baseline": base["release"] if base else release, "manifest": m,
+                                  "model": agents.MODEL, "prompt_version": agents.PROMPT_VERSION, "metrics": metrics,
                                   "passed": not fails, "failures": fails, "cases": rows}, indent=1, ensure_ascii=False) + "\n")
     for r in rows:
         print(f"{r['id']:22} {r['route']:11} expect {r['expect']:11} {'ok' if r['acceptable'] else 'MISS'}")

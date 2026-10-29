@@ -1,0 +1,82 @@
+# The agent roster. Each agent has one goal, acts alone only in the risk-reducing direction, and has a
+# line it never crosses. The agents page and `GET /api/agents` read this file (ADR 0030).
+
+[[agent]]
+id = "supervisor"
+name = "Supervisor"
+goal = "Every open HCP need is resolved once, without overlap."
+perceives = "Every agent event"
+acts_alone = "Assigns goals, breaks ties, escalates"
+proposes = "Conflicts it cannot settle by policy"
+never = "Override the policy kernel"
+model = "sonnet"
+
+[[agent]]
+id = "sentinel"
+name = "Safety sentinel"
+goal = "No adverse event is missed on any channel."
+perceives = "Every inquiry, rep note, call transcript and portal chat"
+acts_alone = "Opens a pharmacovigilance case and freezes contact on that HCP and product"
+proposes = "Nothing"
+never = "Assess causality"
+model = "haiku"
+
+[[agent]]
+id = "inquiry"
+name = "Inquiry agent"
+goal = "Answer the doctor's question from approved content."
+perceives = "Its own case"
+acts_alone = "Plans the steps, retrieves, selects blocks, asks a clarifying question from an approved template"
+proposes = "Drafts outside the cleared topics"
+never = "Write medical text or answer off-label"
+model = "haiku"
+
+[[agent]]
+id = "outreach"
+name = "Outreach coordinator"
+goal = "The right next contact for each doctor, with no overlap."
+perceives = "HCP 360"
+acts_alone = "Holds a duplicate or conflicting touch"
+proposes = "Every new contact, to a rep or marketer"
+never = "Contact a doctor without consent"
+model = "haiku"
+
+[[agent]]
+id = "steward"
+name = "Content steward"
+goal = "Nothing goes out on stale content."
+perceives = "Withdrawals, expiries and uncovered questions"
+acts_alone = "Pulls impacted drafts back to review"
+proposes = "Content requests to Medical"
+never = "Edit content"
+model = "haiku"
+
+[[agent]]
+id = "insight"
+name = "Insight agent"
+goal = "Cross-channel insight that teams can reuse."
+perceives = "The HCP 360 timeline"
+acts_alone = "Writes traced insight digests for internal teams"
+proposes = "Themes for Medical Affairs"
+never = "Send anything to a doctor"
+model = "sonnet"
+
+[[agent]]
+id = "guardian"
+name = "Guardian"
+goal = "The platform stays inside its limits."
+perceives = "Reviewer override rates, budgets, eval results"
+acts_alone = "Turns off a country's automatic replies"
+proposes = "Raising autonomy back"
+never = "Raise anyone's autonomy"
+model = "none"
+
+[[agent]]
+id = "improver"
+name = "Improver"
+goal = "Fewer reviewer corrections."
+perceives = "Reviewer rejections and eval failures"
+acts_alone = "Writes proposals from repeated corrections"
+proposes = "A change to the automatic topics, a new prompt or router version"
+never = "Promote anything"
+model = "sonnet"

@@ -32,5 +32,5 @@ def test_sending_what_a_human_should_review_fails_the_release():
     assert any(f.startswith("unsafe_auto_sends") for f in failures([*GOOD, row("e", "review", "send")]))
 
 
-def test_a_call_on_another_model_fails_the_release():
-    assert any(f.startswith("non_haiku_calls") for f in failures([*GOOD, row("f", "send", "send", models=["claude-haiku-4-5"])]))
+def test_a_call_off_the_allowlist_fails_the_release():
+    assert any(f.startswith("off_allowlist_calls") for f in failures([*GOOD, row("f", "send", "send", models=["claude-haiku-4-5"])]))

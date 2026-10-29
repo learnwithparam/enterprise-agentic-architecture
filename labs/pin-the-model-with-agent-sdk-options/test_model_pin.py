@@ -1,4 +1,4 @@
-"""Pin the model with Agent SDK options: one model, nothing loaded from the developer's machine, a bill we compute."""
+"""Pin the model with Agent SDK options: an allowlist of two models, nothing loaded from the developer's machine, a bill we compute."""
 
 import pytest
 
@@ -7,17 +7,19 @@ from hcpagents import agents
 CASE = {"id": "lab-pin", "country": "DE", "product": "VEL"}
 
 
-def test_every_agent_runs_on_haiku_5_5_and_loads_nothing_local():
+def test_every_agent_starts_on_haiku_5_5_and_loads_nothing_local(monkeypatch):
+    monkeypatch.setenv("MI_GATEWAY", "http://gateway.test")
     for name in agents.AGENTS:
-        o = agents._options(name, CASE, {}, None, None, [])
+        o = agents._options(agents.MODEL, name, CASE, {}, None, None, [])
         assert o.model == "claude-haiku-5-5"
         assert o.setting_sources == [] and o.plugins == [] and o.strict_mcp_config
         assert o.env["ANTHROPIC_SMALL_FAST_MODEL"] == o.model
 
 
-def test_a_result_that_used_another_model_is_refused():
+def test_a_result_that_used_a_model_off_the_allowlist_is_refused():
+    agents.check_models({"claude-haiku-5-5": {}, "claude-sonnet-5-5": {}})
     with pytest.raises(agents.ModelPolicyError):
-        agents.check_models({"claude-haiku-5-5": {}, "claude-sonnet-5-5": {}})
+        agents.check_models({"claude-haiku-5-5": {}, "claude-haiku-4-5": {}})
 
 
 def test_changing_the_system_prompt_needs_a_new_recording(monkeypatch):

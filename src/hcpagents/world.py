@@ -6,11 +6,28 @@ seed; once provisioned, content status lives in DynamoDB so a withdrawal is a re
 
 import os
 import tomllib
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date
 from functools import cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def load_env(root: Path = ROOT) -> None:
+    """Read the repo's env file into this process only. Never printed, never sourced by a shell,
+    and a variable already set in the shell wins."""
+    path = root / (chr(46) + "env")
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() and not key.startswith("#"):
+            os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
+load_env()
 
 # The demo clock. Content expiry is judged against this date so the demo is repeatable.
 TODAY = date.fromisoformat(os.environ.get("MI_TODAY", "2026-10-15"))
@@ -29,28 +46,67 @@ def _load(rel: str) -> dict:
 
 
 @cache
+def tenants() -> list[dict]:
+    return _load("world/tenants.toml")["tenant"]
+
+
+# The tenant a request or job acts for. Each tenant has its own company, content, HCPs and inbox:
+# quillon in world/, every other one in world/tenants/<id>/. People and policy are shared files.
+DEFAULT_TENANT = "quillon"
+_tenant: ContextVar[str] = ContextVar("tenant", default=DEFAULT_TENANT)
+
+
+def current_tenant() -> str:
+    return _tenant.get()
+
+
+@contextmanager
+def as_tenant(tenant_id: str):
+    """Everything inside this block reads and writes as this tenant."""
+    token = _tenant.set(tenant_id)
+    try:
+        yield
+    finally:
+        _tenant.reset(token)
+
+
+@cache
+def _tenant_file(tenant: str, name: str) -> dict:
+    if tenant not in {t["id"] for t in tenants()}:
+        raise KeyError(f"Unknown tenant {tenant!r}")
+    return _load(f"world/{name}.toml" if tenant == DEFAULT_TENANT else f"world/tenants/{tenant}/{name}.toml")
+
+
 def products() -> dict:
-    return _load("world/products.toml")
+    return _tenant_file(current_tenant(), "products")
 
 
-@cache
 def blocks() -> list[dict]:
-    return _load("world/content.toml")["block"]
+    return _tenant_file(current_tenant(), "content")["block"]
 
 
-@cache
 def hcp_world() -> dict:
-    return _load("world/hcps.toml")
+    return _tenant_file(current_tenant(), "hcps")
 
 
-@cache
 def inquiries() -> list[dict]:
-    return _load("world/inquiries.toml")["inquiry"]
+    return _tenant_file(current_tenant(), "inquiries")["inquiry"]
+
+
+def agents() -> list[dict]:
+    """The agent roster: goal, what each perceives, what it does alone, what it proposes and what it never does."""
+    return _load("world/agents.toml")["agent"]
 
 
 @cache
-def people() -> list[dict]:
+def directory() -> list[dict]:
+    """Everyone who can sign in, across tenants. Only the sign-in path and provisioning read it."""
     return _load("world/people.toml")["user"]
+
+
+def people() -> list[dict]:
+    """The people of the current tenant."""
+    return [u for u in directory() if u.get("tenant", DEFAULT_TENANT) == current_tenant()]
 
 
 @cache
@@ -78,7 +134,7 @@ def hcp(hcp_id: str | None) -> dict | None:
 
 
 def person(user_id: str) -> dict | None:
-    return next((u for u in people() if u["id"] == user_id), None)
+    return next((u for u in directory() if u["id"] == user_id), None)
 
 
 def inquiry(inquiry_id: str) -> dict | None:

@@ -1,0 +1,11 @@
+# Synthetic healthcare professionals of Marlowe Therapeutics.
+
+[[hcp]]
+id = "hcp-m-ortiz"
+name = "Dr. Sofia Ortiz"
+specialty = "Cardiology"
+country = "US"
+city = "Austin"
+registry_id = "US-NPI-1100234"
+consent = { email = true, rep_visit = true, phone = true }
+records = { crm = "CRM-M-0001", marketing = "mk-m-0001", contact_centre = "+1 512 5550 0100", portal = "sortiz@heart-austin.example" }

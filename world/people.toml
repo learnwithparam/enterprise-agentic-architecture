@@ -49,3 +49,11 @@ name = "Tom Becker"
 role = "field_rep"
 country = "DE"
 title = "Field representative, Germany"
+
+[[user]]
+id = "u-reyes"
+name = "Dr. Ines Reyes"
+role = "medical_reviewer"
+country = "US"
+title = "Medical reviewer, Marlowe Therapeutics"
+tenant = "marlowe"
