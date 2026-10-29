@@ -399,7 +399,10 @@ def proposals():
 
 
 @app.post("/api/proposals/refresh")
-def refresh_proposals():
+def refresh_proposals(u: dict = Depends(current_user)):
+    ok, why = authz.user_can(u, "RefreshProposals", "Proposal", "*", {})
+    if not ok:
+        raise HTTPException(403, why)
     return improver.propose()
 
 

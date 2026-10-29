@@ -72,6 +72,7 @@ async def case_events(case_id: str, request: Request, u: dict = Depends(user), m
 
 @router.get("/dead-letters")
 def dead_letters(u: dict = Depends(user)):
+    _may(u, "ViewDeadLetters", "DeadLetter", "*")
     return events.dead_letters()
 
 

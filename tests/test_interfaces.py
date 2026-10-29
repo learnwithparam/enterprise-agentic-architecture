@@ -82,6 +82,11 @@ def test_only_compliance_replays_a_parked_event_or_promotes(client):
     assert client.post("/v1/releases/r-none/promote", headers=as_user("u-raman")).status_code == 409
 
 
+def test_only_compliance_reads_the_parked_events(client):
+    assert client.get("/v1/dead-letters", headers=as_user("u-brandt")).status_code == 403
+    assert isinstance(client.get("/v1/dead-letters", headers=as_user("u-raman")).json(), list)
+
+
 def test_v1_shows_a_release_diff_and_a_missing_one_is_404(client):
     assert client.get("/v1/releases/diff?a=r-x&b=r-y", headers=as_user("u-raman")).status_code == 404
     assert isinstance(client.get("/v1/releases", headers=as_user("u-raman")).json(), list)

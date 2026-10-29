@@ -95,5 +95,6 @@ def test_listing_proposals_writes_nothing_and_refreshing_does():
     h = as_user("u-becker")
     assert c.get("/api/proposals", headers=h).json() == []
     assert c.get("/api/proposals").status_code == 401
-    assert [p["topic"] for p in c.post("/api/proposals/refresh", headers=h).json()] == ["storage"]
+    assert c.post("/api/proposals/refresh", headers=h).status_code == 403
+    assert [p["topic"] for p in c.post("/api/proposals/refresh", headers=as_user("u-brandt")).json()] == ["storage"]
     assert [p["topic"] for p in c.get("/api/proposals", headers=h).json()] == ["storage"]

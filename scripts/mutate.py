@@ -311,6 +311,12 @@ MUTANTS = [
     ("A coverage row cannot name a test that does not exist", "docs/coverage.md",
      "tests/test_ci.py::test_every_ci_dependency_is_pinned", "tests/test_ci.py::test_no_such_test",
      [*PYTEST, "tests/test_coverage.py"]),
+    ("Only compliance reads the parked events", "src/hcpagents/v1.py",
+     '    _may(u, "ViewDeadLetters", "DeadLetter", "*")\n', "",
+     [*PYTEST, "tests/test_interfaces.py::test_only_compliance_reads_the_parked_events"]),
+    ("Only reviewers and compliance ask the improver for proposals", "src/hcpagents/api.py",
+     '    ok, why = authz.user_can(u, "RefreshProposals", "Proposal", "*", {})\n    if not ok:', "    ok = True\n    if not ok:",
+     [*PYTEST, "tests/test_guardian.py::test_listing_proposals_writes_nothing_and_refreshing_does"]),
 ]
 
 
