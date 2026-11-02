@@ -39,8 +39,10 @@ about 250 lines and a table.
 
 - Cost per tenant, agent, release and prompt version is one SQL query (`gateway.spend_by`).
 - A call that skips the gateway fails: `agents.gateway_env` raises when `MI_GATEWAY` is unset.
-- **Not built:** a Bedrock adapter. The second upstream is any Anthropic-compatible endpoint
-  (`MI_GATEWAY_FALLBACK_URL`, `MI_GATEWAY_FALLBACK_KEY`). Bedrock would be one more `Upstream`.
+- **Bedrock is the second provider** when `MI_BEDROCK_REGION` is set. The gateway translates the Messages
+  request to Bedrock Converse and the reply back (including streamed events), and the spend row names the
+  upstream that answered. A throttle (429), a 5xx or a timeout moves to the next upstream. Any
+  Anthropic-compatible endpoint can still follow (`MI_GATEWAY_FALLBACK_URL`, `MI_GATEWAY_FALLBACK_KEY`).
 - Checked live once: four calls on case `inq-101` were logged with agent, release, prompt version and
   case, and their summed cost equalled the case's cost.
 - Enforced by `tests/test_gateway.py` and seven mutants in `scripts/mutate.py`.

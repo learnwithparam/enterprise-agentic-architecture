@@ -8,6 +8,7 @@ answers, and writes one spend_log row tagged with tenant, agent, release, prompt
 uv run uvicorn hcpagents.gateway:app --port 8766
 """
 
+import asyncio
 import contextlib
 import hashlib
 import json
@@ -17,13 +18,16 @@ import threading
 import time
 from dataclasses import dataclass
 
+import boto3
 import httpx
 import uvicorn
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from hcpagents import db, world
-from hcpagents.agents import ALLOWED_MODELS, cost_usd
+from hcpagents import aws, db, world
+from hcpagents.agents import ALLOWED_MODELS, HAIKU, SONNET, cost_usd
 from hcpagents.aws import client
 
 PORT = 8766
@@ -40,17 +44,27 @@ FORWARD = ("content-type", "anthropic-version", "anthropic-beta")
 USAGE = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
 
 
+BEDROCK_MODELS = {m: f"anthropic.{m}-v1:0" for m in (HAIKU, SONNET)}  # derived, so the allowlist stays the only list of models
+BEDROCK_STOP = {"end_turn": "end_turn", "tool_use": "tool_use", "max_tokens": "max_tokens", "stop_sequence": "stop_sequence",
+                "guardrail_intervened": "refusal", "content_filtered": "refusal"}
+
+
 @dataclass
 class Upstream:
     name: str
     base_url: str
     key: str
     transport: httpx.AsyncBaseTransport | None = None
+    kind: str = "messages"  # "messages" speaks the Anthropic API; "bedrock" is translated to Converse
+    client: object | None = None  # a bedrock-runtime client; built on first use when None
 
 
 def upstreams() -> list[Upstream]:
-    """Anthropic first; a second Anthropic-compatible endpoint (a proxy, or Bedrock behind one) when configured."""
+    """Anthropic first. Then Amazon Bedrock when MI_BEDROCK_REGION is set (same models, same account boundary),
+    then a second Anthropic-compatible endpoint (a proxy) when configured."""
     out = [Upstream("anthropic", "https://api.anthropic.com", os.environ.get("ANTHROPIC_API_KEY", ""))]
+    if os.environ.get("MI_BEDROCK_REGION"):
+        out.append(Upstream("bedrock", "", "", kind="bedrock"))
     if url := os.environ.get("MI_GATEWAY_FALLBACK_URL"):
         out.append(Upstream("fallback", url, os.environ.get("MI_GATEWAY_FALLBACK_KEY", "")))
     return out
@@ -134,6 +148,102 @@ def spend_by(tenant: str, *columns: str) -> list[dict]:
                             f"WHERE status < 400 GROUP BY {cols} ORDER BY {cols}").fetchall()
 
 
+# ---------------------------------------------------------------- Amazon Bedrock
+
+def _bedrock(up: Upstream):
+    if up.client is None:
+        if aws.ENDPOINT:
+            up.client = client("bedrock-runtime")
+        else:  # one attempt: failing over is the gateway's job, not the SDK's
+            up.client = boto3.client("bedrock-runtime", region_name=os.environ["MI_BEDROCK_REGION"],
+                                     config=Config(read_timeout=120, retries={"max_attempts": 1}))
+    return up.client
+
+
+def _text(content) -> list[dict]:
+    return [{"text": content}] if isinstance(content, str) else [{"text": b["text"]} for b in content if b.get("type") == "text"]
+
+
+def _block(b: dict) -> dict:
+    if b["type"] == "text":
+        return {"text": b["text"]}
+    if b["type"] == "tool_use":
+        return {"toolUse": {"toolUseId": b["id"], "name": b["name"], "input": b["input"]}}
+    if b["type"] == "tool_result":
+        return {"toolResult": {"toolUseId": b["tool_use_id"], "content": _text(b.get("content", "")),
+                               "status": "error" if b.get("is_error") else "success"}}
+    raise ValueError(f"Bedrock translation has no mapping for a {b['type']} block")
+
+
+def to_converse(body: dict, model: str) -> dict:
+    """A Messages API request as a Bedrock Converse request."""
+    out: dict = {"modelId": BEDROCK_MODELS[model],
+                 "messages": [{"role": m["role"], "content": [{"text": m["content"]}] if isinstance(m["content"], str)
+                               else [_block(b) for b in m["content"]]} for m in body["messages"]],
+                 "inferenceConfig": {"maxTokens": body["max_tokens"]}}
+    if body.get("system"):
+        out["system"] = _text(body["system"])
+    for src, dst in (("temperature", "temperature"), ("top_p", "topP"), ("stop_sequences", "stopSequences")):
+        if src in body:
+            out["inferenceConfig"][dst] = body[src]
+    if body.get("tools"):
+        out["toolConfig"] = {"tools": [{"toolSpec": {"name": t["name"], "description": t.get("description", ""),
+                                                      "inputSchema": {"json": t["input_schema"]}}} for t in body["tools"]]}
+        choice = body.get("tool_choice", {}).get("type")
+        if choice in ("any", "tool"):
+            out["toolConfig"]["toolChoice"] = {"any": {}} if choice == "any" else {"tool": {"name": body["tool_choice"]["name"]}}
+    return out
+
+
+def from_converse(reply: dict, model: str) -> dict:
+    """A Bedrock Converse reply as a Messages API message."""
+    content = []
+    for b in reply["output"]["message"]["content"]:
+        if "text" in b:
+            content.append({"type": "text", "text": b["text"]})
+        elif "toolUse" in b:
+            u = b["toolUse"]
+            content.append({"type": "tool_use", "id": u["toolUseId"], "name": u["name"], "input": u["input"]})
+    return {"id": f"msg_bedrock_{secrets.token_hex(8)}", "type": "message", "role": "assistant", "model": model, "content": content,
+            "stop_reason": BEDROCK_STOP.get(reply["stopReason"], "end_turn"), "stop_sequence": None,
+            "usage": {"input_tokens": reply["usage"]["inputTokens"], "output_tokens": reply["usage"]["outputTokens"]}}
+
+
+def as_events(message: dict) -> bytes:
+    """The Server-Sent Events a streaming caller expects, replayed from a finished message."""
+    def ev(name: str, data: dict) -> str:
+        return f"event: {name}\ndata: {json.dumps({'type': name} | data)}\n\n"
+    out = [ev("message_start", {"message": message | {"content": [], "usage": {**message["usage"], "output_tokens": 1}}})]
+    for i, b in enumerate(message["content"]):
+        start = b | ({"text": ""} if b["type"] == "text" else {"input": {}})
+        delta = {"type": "text_delta", "text": b["text"]} if b["type"] == "text" else {"type": "input_json_delta", "partial_json": json.dumps(b["input"])}
+        out += [ev("content_block_start", {"index": i, "content_block": start}), ev("content_block_delta", {"index": i, "delta": delta}),
+                ev("content_block_stop", {"index": i})]
+    out += [ev("message_delta", {"delta": {"stop_reason": message["stop_reason"], "stop_sequence": None},
+                                 "usage": {"output_tokens": message["usage"]["output_tokens"]}}), ev("message_stop", {})]
+    return "".join(out).encode()
+
+
+def _error_response(status: int, kind: str, message: str) -> httpx.Response:
+    return httpx.Response(status, json={"type": "error", "error": {"type": kind, "message": message}})
+
+
+async def _converse(up: Upstream, body: dict, model: str) -> httpx.Response:
+    """Call Bedrock and answer as the Messages API would. Throttling and 5xx come back as their status, so the
+    same retry set moves on to the next upstream; a timeout or a lost connection raises like any transport error."""
+    try:
+        reply = await asyncio.to_thread(lambda: _bedrock(up).converse(**to_converse(body, model)))
+    except ClientError as e:
+        status = e.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 500)
+        return _error_response(status, "api_error", e.response.get("Error", {}).get("Message", "Bedrock refused the call"))
+    except BotoCoreError as e:
+        raise httpx.TransportError(str(e)) from e
+    message = from_converse(reply, model)
+    if body.get("stream"):
+        return httpx.Response(200, content=as_events(message), headers={"content-type": "text/event-stream"})
+    return httpx.Response(200, json=message)
+
+
 # ---------------------------------------------------------------- the proxy
 
 app = FastAPI(title="AI gateway")
@@ -177,8 +287,11 @@ async def messages(request: Request):
     for up in upstreams():
         http = httpx.AsyncClient(transport=up.transport, base_url=up.base_url, timeout=120)
         try:
-            resp = await http.send(http.build_request("POST", "/v1/messages", content=payload, headers=headers | {"x-api-key": up.key}),
-                                   stream=True)
+            if up.kind == "bedrock":
+                resp = await _converse(up, body, model)
+            else:
+                resp = await http.send(http.build_request("POST", "/v1/messages", content=payload, headers=headers | {"x-api-key": up.key}),
+                                       stream=True)
         except httpx.HTTPError as e:
             last = e
             await http.aclose()

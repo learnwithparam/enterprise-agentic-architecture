@@ -5,6 +5,7 @@ import json
 
 import httpx
 import pytest
+from botocore.exceptions import ClientError
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -171,3 +172,128 @@ def test_a_live_agent_call_carries_a_virtual_key_and_the_gateway_url_never_the_p
     monkeypatch.delenv("MI_GATEWAY")
     with pytest.raises(RuntimeError, match="AI gateway"):
         agents._options(HAIKU, "triage", {"id": "inq-101"}, {}, None, lambda *_: None, [])
+
+
+# ---------------------------------------------------------------- Amazon Bedrock as the second provider (ADR 0019)
+
+class Bedrock:
+    """A bedrock-runtime client that records what it was asked and answers, or fails, as told."""
+
+    def __init__(self, fail: Exception | None = None):
+        self.calls, self.fail = [], fail
+
+    def converse(self, **kw):
+        self.calls.append(kw)
+        if self.fail:
+            raise self.fail
+        return {"output": {"message": {"role": "assistant", "content": [{"text": "from bedrock"}]}}, "stopReason": "end_turn",
+                "usage": {"inputTokens": 1000, "outputTokens": 200}}
+
+
+class TimedOut(httpx.AsyncBaseTransport):
+    async def handle_async_request(self, request):
+        raise httpx.ReadTimeout("the provider did not answer", request=request)
+
+
+def bedrock_second(monkeypatch, first: httpx.AsyncBaseTransport | FastAPI, bedrock: Bedrock) -> None:
+    transport = first if isinstance(first, httpx.AsyncBaseTransport) else httpx.ASGITransport(app=first)
+    monkeypatch.setattr(gateway, "upstreams", lambda: [
+        gateway.Upstream("anthropic", "http://provider", "real-key", transport),
+        gateway.Upstream("bedrock", "", "", kind="bedrock", client=bedrock)])
+
+
+def throttled() -> ClientError:
+    return ClientError({"Error": {"Code": "ThrottlingException", "Message": "slow down"}, "ResponseMetadata": {"HTTPStatusCode": 429}}, "Converse")
+
+
+def call(key: str, payload: dict | None = None):
+    return Gateway([]).post(key, payload or body())
+
+
+def test_primary_503_fails_over(monkeypatch):
+    busy, _ = provider(status=503)
+    br = Bedrock()
+    bedrock_second(monkeypatch, busy, br)
+    key = gateway.issue_key("quillon", "triage", 1.0)
+    r = call(key)
+    assert r.status_code == 200 and r.json()["content"][0]["text"] == "from bedrock" and len(br.calls) == 1
+
+
+def test_429_fails_over(monkeypatch):
+    limited, _ = provider(status=429)
+    br = Bedrock()
+    bedrock_second(monkeypatch, limited, br)
+    assert call(gateway.issue_key("quillon", "triage", 1.0)).status_code == 200 and br.calls
+
+
+def test_timeout_fails_over(monkeypatch):
+    br = Bedrock()
+    bedrock_second(monkeypatch, TimedOut(), br)
+    assert call(gateway.issue_key("quillon", "triage", 1.0)).status_code == 200 and br.calls
+
+
+def test_a_throttled_bedrock_is_the_last_stop_and_the_caller_gets_a_502(monkeypatch):
+    busy, _ = provider(status=503)
+    bedrock_second(monkeypatch, busy, Bedrock(fail=throttled()))
+    key = gateway.issue_key("quillon", "triage", 1.0)
+    assert call(key).status_code == 502 and spend(key)[0]["status"] == 502
+
+
+def test_provider_recorded_and_metered(monkeypatch):
+    good, seen = provider()
+    busy, _ = provider(status=503)
+    key = gateway.issue_key("quillon", "triage", 1.0)
+    bedrock_second(monkeypatch, good, Bedrock())
+    first = call(key)
+    bedrock_second(monkeypatch, busy, Bedrock())
+    second = call(key)
+    assert (first.headers["x-mi-upstream"], second.headers["x-mi-upstream"]) == ("anthropic", "bedrock")
+    rows = spend(key)
+    assert [r["upstream"] for r in rows] == ["anthropic", "bedrock"]
+    assert [float(r["cost_usd"]) for r in rows] == [agents.cost_usd(USAGE, HAIKU)] * 2 and seen
+
+
+def test_converse_translation_roundtrip():
+    request = {"model": SONNET, "max_tokens": 300, "temperature": 0.2, "system": [{"type": "text", "text": "Be brief."}],
+               "messages": [{"role": "user", "content": "hi"},
+                            {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "lookup", "input": {"q": "x"}}]},
+                            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "found"}]}],
+               "tools": [{"name": "lookup", "description": "Find it", "input_schema": {"type": "object"}}],
+               "tool_choice": {"type": "tool", "name": "lookup"}}
+    out = gateway.to_converse(request, SONNET)
+    assert out["modelId"] == gateway.BEDROCK_MODELS[SONNET] and out["system"] == [{"text": "Be brief."}]
+    assert out["inferenceConfig"] == {"maxTokens": 300, "temperature": 0.2}
+    assert out["messages"][1]["content"] == [{"toolUse": {"toolUseId": "t1", "name": "lookup", "input": {"q": "x"}}}]
+    assert out["messages"][2]["content"][0]["toolResult"] == {"toolUseId": "t1", "content": [{"text": "found"}], "status": "success"}
+    assert out["toolConfig"]["tools"][0]["toolSpec"]["inputSchema"] == {"json": {"type": "object"}}
+    assert out["toolConfig"]["toolChoice"] == {"tool": {"name": "lookup"}}
+    back = gateway.from_converse({"output": {"message": {"content": [{"text": "ok"}, {"toolUse": {"toolUseId": "t2", "name": "lookup", "input": {"q": "y"}}}]}},
+                                  "stopReason": "tool_use", "usage": {"inputTokens": 7, "outputTokens": 3}}, SONNET)
+    assert back["content"] == [{"type": "text", "text": "ok"}, {"type": "tool_use", "id": "t2", "name": "lookup", "input": {"q": "y"}}]
+    assert (back["stop_reason"], back["usage"]) == ("tool_use", {"input_tokens": 7, "output_tokens": 3})
+
+
+def test_a_streaming_caller_gets_events_it_can_price(monkeypatch):
+    busy, _ = provider(status=503)
+    bedrock_second(monkeypatch, busy, Bedrock())
+    key = gateway.issue_key("quillon", "triage", 1.0)
+    r = call(key, body(stream=True))
+    assert r.status_code == 200 and "content_block_delta" in r.text and "message_stop" in r.text
+    assert float(spend(key)[0]["cost_usd"]) == agents.cost_usd(USAGE, HAIKU)
+
+
+def test_the_real_bedrock_wire_answers_through_the_emulator(monkeypatch):
+    """No fake client here: boto3 calls Floci's bedrock-runtime. Its reply is a stub, so this proves the wire, not the words."""
+    busy, _ = provider(status=503)
+    bedrock_second(monkeypatch, busy, None)
+    key = gateway.issue_key("quillon", "triage", 1.0)
+    r = call(key)
+    assert r.status_code == 200 and r.json()["content"][0]["text"].startswith(f"Floci stub response for model=anthropic.{HAIKU}")
+    assert spend(key)[0]["upstream"] == "bedrock"
+
+
+def test_bedrock_joins_the_chain_only_when_a_region_is_set(monkeypatch):
+    monkeypatch.delenv("MI_BEDROCK_REGION", raising=False)
+    assert [u.name for u in gateway.upstreams()] == ["anthropic"]
+    monkeypatch.setenv("MI_BEDROCK_REGION", "eu-central-1")
+    assert [u.name for u in gateway.upstreams()] == ["anthropic", "bedrock"]

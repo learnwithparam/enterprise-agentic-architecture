@@ -118,7 +118,7 @@ automatic-reply switch. A US reviewer cannot approve a Japanese draft.
 | Durable work | Temporal dev server | A Temporal cluster the stack takes as an input | Waits of days, timers and crash resume |
 | Events | EventBridge to SQS, with a dead-letter queue | Same, plus connectors to the safety database | Each team's tool consumes its own queue |
 | Services | One image, two processes | ECS Fargate for the API and the worker | No Kubernetes for two stateless services (ADR 0031) |
-| Models | Claude Haiku 5.5 and Sonnet 5.5 through our AI gateway | Same; a Bedrock adapter is not built | The router picks the model, the gateway meters it |
+| Models | Claude Haiku 5.5 and Sonnet 5.5 through our AI gateway | Same, with Amazon Bedrock as the second provider when `MI_BEDROCK_REGION` is set (ADR 0019) | The router picks the model, the gateway meters it |
 
 ### 3. Agentic AI in a regulated setting
 
@@ -244,9 +244,10 @@ promotional content generation.
 | Planned touches held for cap, consent or open case | Unknown | Reported weekly to brand teams |
 | Model cost per case | Not applicable | Under one cent |
 
-**Known limits of this build.** Autonomy settings and queues are shared across tenants. There is no Bedrock
-failover adapter. Sign-in is a password exchange, not an OAuth device flow, and the MCP server hosts no OAuth
-server. The CDK stack has no migration task, blue/green deploy or second region. The `hcp_app` database role
+**Known limits of this build.** A live Bedrock answer needs an AWS account: Floci returns a stub, so the tests
+prove the failover and the request translation, not the model's words. The CLI signs in with the authorization
+code flow and PKCE because Floci's Cognito has no device grant; AWS Cognito offers none either, so a
+device flow would need a separate service. The CDK stack has no migration task, blue/green deploy or second region. The `hcp_app` database role
 in `migrations/001_documents.sql` has a local-only password that production sets from Secrets Manager. The
 static console sets no content security policy of its own.
 
