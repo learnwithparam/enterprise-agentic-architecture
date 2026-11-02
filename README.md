@@ -9,6 +9,7 @@ and a test that proves the property.
 | 2. Build Grounded Agent Replies | Pinned agents that select approved block ids, and a check on every sentence | [Ground replies](labs/ground-replies-with-approved-blocks/), [Pin the model](labs/pin-the-model-with-agent-sdk-options/) |
 | 3. Secure Agent Tool Calls with Cedar | A Cedar check on every tool call, and an audit trail nobody can edit | [Guard tool calls](labs/guard-tool-calls-with-cedar/), [Hash chain](labs/prove-the-audit-trail-with-a-hash-chain/) |
 | 4. Prove Every Release with an Eval Gate | Twenty eval cases, a gate that fails on one missed adverse event, and mutants | [Gate releases](labs/gate-releases-with-evals/) |
+| Beyond the sessions | A router, bounded plans, arbitration, durable cases, tenant isolation, a facet gate, a guardian and a sentinel | [Pick the model](labs/pick-the-model-with-a-router/), [Bound plans](labs/bound-agent-plans-with-a-policy-kernel/), [Arbitrate](labs/arbitrate-agents-with-a-supervisor/), [Keep a case alive](labs/keep-a-case-alive-with-temporal/), [Isolate tenants](labs/isolate-tenants-with-row-level-security/), [Retrieve behind a gate](labs/retrieve-behind-a-facet-gate/), [Let the guardian only tighten](labs/let-the-guardian-only-tighten/), [Watch with the sentinel](labs/watch-with-the-sentinel-and-steward/) |
 
 **The job:** answer doctors' product questions for a pharmaceutical company in minutes instead of days,
 without ever sending a sentence that Compliance cannot trace to current, approved content, and without

@@ -13,11 +13,29 @@ production.
 and the background model environment variables pinned to the same id. Every result is checked for the
 models it used, and cost is computed from tokens at Haiku 5.5 prices.
 
+## Prerequisites
+
+[uv](https://docs.astral.sh/uv/) only. No Floci or API key is needed.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Agent options built in one place] --> B[Model pinned and settings sources empty]
+    B --> C[No plugins and no slash commands]
+    B --> D[Background model variables set to the same id]
+    C --> E[Run on claude-haiku-5-5 only]
+    D --> E
+    E --> F[Any other model in the result is refused]
+```
+
 ## Run it
 
 ```bash
 make lab N=pin-the-model-with-agent-sdk-options
 ```
+
+Expect: 4 passed
 
 ## Read
 

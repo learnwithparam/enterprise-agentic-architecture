@@ -12,11 +12,28 @@ templates, the safety information and the AI disclosure. `grounding.verify` spli
 sentences and requires each one to match a sentence in a current approved block for that product and
 country. A changed word, a withdrawn block or another country's label fails the check.
 
+## Prerequisites
+
+[uv](https://docs.astral.sh/uv/) only. No Floci or API key is needed.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Model picks block ids] --> B[Compose places blocks verbatim between templates]
+    B --> C[Verify splits the reply into sentences]
+    C --> D{Sentence matches a current approved block}
+    D -->|yes for this product and country| E[Reply may send]
+    D -->|no| F[Reply is refused]
+```
+
 ## Run it
 
 ```bash
 make lab N=ground-replies-with-approved-blocks
 ```
+
+Expect: 4 passed
 
 ## Read
 

@@ -11,11 +11,30 @@ gone.
 earlier tries returned. Haiku 5.5 is the default, Sonnet 5.5 takes planning and any failed Haiku try, and
 after Sonnet fails or the budget runs out a person takes the case. It can only return one of two ids.
 
+## Prerequisites
+
+[uv](https://docs.astral.sh/uv/) only. No Floci or API key is needed.
+
+## How it works
+
+```mermaid
+flowchart TD
+    A[Task class risk budget and earlier tries] --> B{Sonnet already failed}
+    B -->|yes| H[A person takes the case]
+    B -->|no| C{Planning task or failed Haiku try}
+    C -->|no| D[Haiku 5.5]
+    C -->|yes| E{Budget covers one Sonnet call}
+    E -->|no| H
+    E -->|yes| F[Sonnet 5.5]
+```
+
 ## Run it
 
 ```bash
 make lab N=pick-the-model-with-a-router
 ```
+
+Expect: 7 passed
 
 ## Read
 

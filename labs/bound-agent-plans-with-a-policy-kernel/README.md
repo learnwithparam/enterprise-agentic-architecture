@@ -10,11 +10,29 @@ screen produces a fluent reply and no safety report.
 may set, and how many cycles a loop may take. Every step is checked before it runs and every route before
 it is returned. A violation fails closed to a reviewer, with nothing drafted or sent.
 
+## Prerequisites
+
+[uv](https://docs.astral.sh/uv/) only. No Floci or API key is needed.
+
+## How it works
+
+```mermaid
+flowchart TD
+    A[Agent picks how to do the next step] --> B[Kernel checks the step]
+    B -->|next in order and no route yet| C[Step runs and sets only its declared facts]
+    B -->|out of order or unknown| F[Fail closed to a reviewer]
+    C --> D[Kernel checks the route the facts imply]
+    D -->|route matches| E[Route returned]
+    D -->|route differs| F
+```
+
 ## Run it
 
 ```bash
 make lab N=bound-agent-plans-with-a-policy-kernel
 ```
+
+Expect: 5 passed
 
 ## Read
 

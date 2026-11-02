@@ -12,12 +12,34 @@ through the full graph and scores them; `make check` fails on any line that does
 lists its expected route and the more cautious routes that are also safe, so caution passes and risk does
 not.
 
+## Prerequisites
+
+[uv](https://docs.astral.sh/uv/) only. No Floci or API key is needed.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Prompt or model change] --> B[make evals runs twenty inquiries]
+    B --> C[Each route checked against expect and also safe]
+    B --> D[Each model call checked against the allowlist]
+    C --> E[Gate compares metrics to gate.toml]
+    D --> E
+    E --> F[Release passes or fails]
+```
+
 ## Run it
 
 ```bash
 make lab N=gate-releases-with-evals   # the gate's logic, no Floci needed
 make up && make evals                 # the real gate over every inquiry, in replay, free
 ```
+
+Expect: 5 passed
+
+Then `make evals` scores all twenty inquiries; its last two lines are the totals and the verdict.
+
+Expect: 20 cases, route_acceptable 1.0, ae_recall 1.0, then `gate passed`
 
 ## Read
 

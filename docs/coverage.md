@@ -17,7 +17,7 @@ A dash means the requirement has no screen or no lab of its own. Every row has a
 |---|---|---|---|---|
 | Overlapping messages to one doctor are held | case-study.md | /hcp | arbitrate-agents-with-a-supervisor | tests/test_outreach.py::test_an_open_medical_case_holds_the_promotion_and_the_reason_points_at_the_case |
 | Product questions are routed in seconds | architecture-walkthrough.md | /inbox | route-inquiries-with-a-routing-table | tests/test_graph.py::test_step_functions_on_floci_route_like_python |
-| Insight is combined across teams | architecture-walkthrough.md | /hcp | - | tests/test_perception.py::test_a_theme_needs_two_doctors_and_names_its_sources_but_never_quotes_them |
+| Insight is combined across teams | architecture-walkthrough.md | /hcp | watch-with-the-sentinel-and-steward | tests/test_perception.py::test_a_theme_needs_two_doctors_and_names_its_sources_but_never_quotes_them |
 | Content is provably current and approved | architecture-walkthrough.md | /content | ground-replies-with-approved-blocks | tests/test_grounding.py::test_a_block_withdrawn_after_drafting_fails_at_send_time |
 | One record per doctor across channels | case-study.md | /hcp | - | tests/test_identity.py::test_a_landed_interaction_joins_the_360_of_its_doctor_and_unknowns_wait_for_a_human |
 | Channel events are signed and land once | architecture-walkthrough.md | - | - | tests/test_ingest.py::test_a_signed_webhook_is_stored_and_the_same_event_again_changes_nothing |
@@ -29,10 +29,10 @@ A dash means the requirement has no screen or no lab of its own. Every row has a
 | Prompt injection is declined | architecture-walkthrough.md | /inbox | - | tests/test_rules.py::test_injection_screen |
 | Audit trail nobody can edit | architecture-walkthrough.md | /proof | prove-the-audit-trail-with-a-hash-chain | tests/test_flow.py::test_ledger_detects_tampering_and_the_archive_refuses_deletion |
 | GDPR erasure against an immutable ledger | architecture-walkthrough.md | - | - | tests/test_privacy.py::test_erasing_a_person_makes_their_data_unreadable_and_the_chain_still_verifies |
-| Human approval is an electronic signature | architecture-walkthrough.md | /review | - | tests/test_durable.py::test_approval_without_a_fresh_signature_is_refused_and_the_case_stays_open |
+| Human approval is an electronic signature | architecture-walkthrough.md | /review | keep-a-case-alive-with-temporal | tests/test_durable.py::test_approval_without_a_fresh_signature_is_refused_and_the_case_stays_open |
 | First release scope and success measures | case-study.md | /releases | gate-releases-with-evals | tests/test_releases.py::test_the_eval_gate_blocks_a_release_that_regresses |
 | EU AI Act classification and duties | eu-ai-act.md | - | - | tests/test_world.py::test_every_reference_resolves |
-| Validation pack | validation-pack.md | - | - | tests/test_guardian.py::test_a_redteam_miss_fails_the_eval_gate |
+| Validation pack | validation-pack.md | - | let-the-guardian-only-tighten | tests/test_guardian.py::test_a_redteam_miss_fails_the_eval_gate |
 
 ## Case study, Part B
 
@@ -51,7 +51,7 @@ A dash means the requirement has no screen or no lab of its own. Every row has a
 | Solution shaping and ADRs | adr/README.md | - | - | tests/test_claude_config.py::test_every_file_a_skill_rule_or_subagent_names_exists |
 | Governance gates | validation-pack.md | /releases | gate-releases-with-evals | tests/test_releases.py::test_only_a_clean_run_can_become_the_baseline |
 | A vendor-agnostic model layer | adr/0019-one-thin-gateway-meters-every-model-call.md | /agents | pick-the-model-with-a-router | tests/test_gateway.py::test_when_the_first_provider_is_busy_the_next_one_answers_and_the_log_says_which |
-| Swappable embeddings | adr/0012-hybrid-retrieval-behind-a-hard-facet-gate.md | - | - | tests/test_retrieval.py::test_an_unknown_adapter_name_is_refused |
+| Swappable embeddings | adr/0012-hybrid-retrieval-behind-a-hard-facet-gate.md | - | retrieve-behind-a-facet-gate | tests/test_retrieval.py::test_an_unknown_adapter_name_is_refused |
 | QA with mutation testing | architecture-walkthrough.md | - | - | tests/test_ci.py::test_ci_runs_the_gate_and_every_security_check_on_each_pull_request |
 | DevSecOps in CI | architecture-walkthrough.md | - | - | tests/test_ci.py::test_every_ci_dependency_is_pinned |
 | Data engineering, streaming and batch | architecture-walkthrough.md | - | - | tests/test_ingest.py::test_a_batch_file_is_ingested_once_moved_aside_and_bad_lines_do_not_stop_it |
@@ -72,21 +72,21 @@ A dash means the requirement has no screen or no lab of its own. Every row has a
 | Tool use and MCP | adr/0028-machine-interfaces-share-one-front-door.md | - | - | tests/test_interfaces.py::test_mcp_tools_are_tenant_scoped_and_cedar_checked |
 | Multi-agent coordination and arbitration | adr/0032-agents-talk-through-state-and-events-not-to-each-other.md | /hcp | arbitrate-agents-with-a-supervisor | tests/test_outreach.py::test_two_proposals_within_days_of_each_other_yield_to_the_one_that_serves_the_doctor |
 | Shared memory in HCP 360 | architecture-walkthrough.md | /hcp | - | tests/test_identity.py::test_every_channel_handle_resolves_to_the_doctor_it_belongs_to |
-| Perception through events | architecture-walkthrough.md | /inbox | - | tests/test_perception.py::test_a_rash_in_a_rep_note_opens_a_safety_case_and_freezes_contact_with_nobody_asking |
+| Perception through events | architecture-walkthrough.md | /inbox | watch-with-the-sentinel-and-steward | tests/test_perception.py::test_a_rash_in_a_rep_note_opens_a_safety_case_and_freezes_contact_with_nobody_asking |
 | Autonomy levels and human in the loop | architecture-walkthrough.md | /review | - | tests/test_rules.py::test_autonomy_needs_switch_topic_and_adult_population |
 | Verification and grounding | architecture-walkthrough.md | /review | ground-replies-with-approved-blocks | tests/test_grounding.py::test_an_invented_sentence_fails_the_check |
 | Guardrails and injection defence | architecture-walkthrough.md | /inbox | guard-tool-calls-with-cedar | tests/test_rules.py::test_tool_guard_blocks_other_countries_and_unknown_tools |
 | Authentication | adr/0010-signed-tokens-and-server-side-tenant.md | / | - | tests/test_flow.py::test_a_token_for_another_audience_is_refused |
 | Authorization with Cedar | architecture-walkthrough.md | - | guard-tool-calls-with-cedar | tests/test_flow.py::test_cedar_refuses_a_principal_acting_across_tenants |
-| Multi-tenant isolation | adr/0009-postgres-with-row-level-security.md | / | - | tests/test_tenancy.py::test_every_table_forces_row_level_security_with_a_tenant_policy |
+| Multi-tenant isolation | adr/0009-postgres-with-row-level-security.md | / | isolate-tenants-with-row-level-security | tests/test_tenancy.py::test_every_table_forces_row_level_security_with_a_tenant_policy |
 | Caching | architecture-walkthrough.md | - | - | tests/test_cache.py::test_search_still_answers_when_valkey_is_down |
-| Long running and durable execution | adr/0016-temporal-owns-the-life-of-a-case.md | /review | - | tests/test_durable.py::test_another_worker_resumes_a_case_from_temporal_history_without_repeating_a_step |
+| Long running and durable execution | adr/0016-temporal-owns-the-life-of-a-case.md | /review | keep-a-case-alive-with-temporal | tests/test_durable.py::test_another_worker_resumes_a_case_from_temporal_history_without_repeating_a_step |
 | Always on agents | architecture-walkthrough.md | /content | - | tests/test_cache.py::test_the_always_on_steward_invalidates_a_draft_when_content_is_withdrawn |
 | Idempotency and the dead-letter queue | adr/0020-delivery-is-at-least-once-so-consumers-are-idempotent.md | - | - | tests/test_events.py::test_an_event_that_fails_every_attempt_is_parked_with_its_error_and_leaves_the_queue |
-| Hybrid retrieval | adr/0012-hybrid-retrieval-behind-a-hard-facet-gate.md | /content | - | tests/test_retrieval.py::test_hybrid_finds_every_answer_that_full_text_alone_misses |
+| Hybrid retrieval | adr/0012-hybrid-retrieval-behind-a-hard-facet-gate.md | /content | retrieve-behind-a-facet-gate | tests/test_retrieval.py::test_hybrid_finds_every_answer_that_full_text_alone_misses |
 | Self-improvement proven per release | adr/0025-a-release-is-a-hash-and-must-beat-its-baseline.md | /releases | gate-releases-with-evals | tests/test_releases.py::test_a_diff_names_the_metrics_and_the_parts_that_changed |
-| The improver proposes and promotes nothing | adr/0026-the-guardian-only-tightens-and-the-improver-only-proposes.md | /agents | - | tests/test_guardian.py::test_a_topic_reviewers_keep_rejecting_becomes_one_proposal_and_nothing_is_promoted |
-| Red-team evals | architecture-walkthrough.md | /proof | - | tests/test_guardian.py::test_every_attack_in_the_corpus_is_caught |
+| The improver proposes and promotes nothing | adr/0026-the-guardian-only-tightens-and-the-improver-only-proposes.md | /agents | let-the-guardian-only-tighten | tests/test_guardian.py::test_a_topic_reviewers_keep_rejecting_becomes_one_proposal_and_nothing_is_promoted |
+| Red-team evals | architecture-walkthrough.md | /proof | let-the-guardian-only-tighten | tests/test_guardian.py::test_every_attack_in_the_corpus_is_caught |
 | Cost control and budgets | adr/0019-one-thin-gateway-meters-every-model-call.md | /agents | pin-the-model-with-agent-sdk-options | tests/test_model_policy.py::test_spend_cap_stops_live_calls |
 | Harness engineering | architecture-walkthrough.md | - | pin-the-model-with-agent-sdk-options | tests/test_model_policy.py::test_options_are_isolated_and_pinned |
 | Observability with OpenTelemetry | adr/0027-one-trace-per-case-with-pii-redacted.md | - | - | tests/test_tracing.py::test_a_case_is_one_trace_with_a_child_per_step |

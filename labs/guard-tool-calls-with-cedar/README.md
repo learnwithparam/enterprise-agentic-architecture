@@ -12,12 +12,32 @@ allowlist and the case's country and product in code, then asks Amazon Verified 
 `policies/cedar/agents.cedar` says the same thing in a language Compliance can read. Either check alone is
 enough to refuse.
 
+## Prerequisites
+
+Docker, [uv](https://docs.astral.sh/uv/) and `make up` (Floci and the policy store).
+
+## How it works
+
+```mermaid
+flowchart TD
+    A[Agent asks to call a tool] --> B[PreToolUse hook runs guards pre_tool]
+    B --> C{Tool on the allowlist}
+    C -->|no| D[Deny and record the refusal]
+    C -->|yes| E{Country and product match the case}
+    E -->|no| D
+    E -->|yes| F[Verified Permissions checks the Cedar policies]
+    F -->|deny| D
+    F -->|allow| G[Tool runs and the call is recorded]
+```
+
 ## Run it
 
 ```bash
 make up    # Floci and the policy store
 make lab N=guard-tool-calls-with-cedar
 ```
+
+Expect: 3 passed
 
 ## Read
 

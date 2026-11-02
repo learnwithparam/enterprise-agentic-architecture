@@ -104,3 +104,43 @@ def test_md_links_resolve():
             if not ok:
                 problems.append(f"{md.relative_to(ROOT)}: path {ref}")
     assert not problems, "\n".join(sorted(set(problems)))
+
+
+def _labs() -> list[Path]:
+    return sorted(p for p in (ROOT / "labs").iterdir() if p.is_dir() and (p / "README.md").is_file())
+
+
+def test_every_lab_is_in_session_map():
+    """Both the top README and the labs index link every lab folder, so a lab nobody can find does not ship."""
+    problems = []
+    for index in (ROOT / "README.md", ROOT / "labs" / "README.md"):
+        text = index.read_text()
+        for lab in _labs():
+            if f"labs/{lab.name}/" not in text and f"({lab.name}/)" not in text:
+                problems.append(f"{index.relative_to(ROOT)} does not link {lab.name}")
+    assert len(_labs()) >= 14 and not problems, "\n".join(problems)
+
+
+def test_every_lab_with_a_test_named_in_coverage_has_its_row_filled():
+    """A dash in the Lab column is only allowed where no lab teaches the row's test file."""
+    taught = {"test_durable.py": "keep-a-case-alive-with-temporal", "test_tenancy.py": "isolate-tenants-with-row-level-security",
+              "test_retrieval.py": "retrieve-behind-a-facet-gate", "test_guardian.py": "let-the-guardian-only-tighten"}
+    problems = [f"{req}: Lab is - but {lab} teaches {Path(test).name}" for req, _, _, l, test in _coverage_rows()
+                for name, lab in taught.items() if l == "-" and Path(test.partition("::")[0]).name == name]
+    assert not problems, "\n".join(problems)
+
+
+def test_lab_readme_shape():
+    """Every lab README has prerequisites, a diagram of how it works, and at least one line the learner can check."""
+    problems = []
+    for lab in _labs():
+        text = (lab / "README.md").read_text()
+        if not re.search(r"^## Prerequisites$", text, re.M):
+            problems.append(f"{lab.name}: no Prerequisites section")
+        if "```mermaid" not in text:
+            problems.append(f"{lab.name}: no mermaid diagram")
+        if not re.search(r"^Expect: ", text, re.M):
+            problems.append(f"{lab.name}: no Expect: line")
+        if not re.search(r"^## Break it", text, re.M):
+            problems.append(f"{lab.name}: no Break it section")
+    assert not problems, "\n".join(problems)

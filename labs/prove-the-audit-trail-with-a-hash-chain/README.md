@@ -12,12 +12,31 @@ past entry breaks the chain at that entry. Every tenth hash is signed with a KMS
 also written to an S3 bucket under Object Lock in compliance mode for ten years. An insider who rewrites
 the chain from the edit onwards still cannot forge the signatures or delete the archived copies.
 
+## Prerequisites
+
+Docker, [uv](https://docs.astral.sh/uv/) and `make up` (Floci, for the Object Lock test).
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[New ledger entry] --> B[Hash over previous hash and entry]
+    B --> C[Row written to the chain]
+    B --> D[Checkpoint hash signed with KMS]
+    B --> E[Copy written to S3 under Object Lock]
+    C --> F[Verify recomputes every hash]
+    D --> F
+    F --> G[An edit breaks the chain at that entry]
+```
+
 ## Run it
 
 ```bash
 make up
 make lab N=prove-the-audit-trail-with-a-hash-chain
 ```
+
+Expect: 5 passed
 
 ## Read
 

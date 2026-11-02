@@ -10,11 +10,28 @@ replay the conversation.
 rule: a touch that answers the doctor's own need beats a promotional one, then the earlier date wins. The
 loser is held, not deleted, and keeps the id of the proposal it yielded to. No model is asked.
 
+## Prerequisites
+
+[uv](https://docs.astral.sh/uv/) only. No Floci or API key is needed.
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Proposals for one doctor] --> B[Pairs within three days]
+    B --> C[Rank non promotional first then earlier date]
+    C --> D[Lower ranked touch is held]
+    D --> E[Held touch keeps the id it yielded to]
+    B --> F[Far apart touches pass untouched]
+```
+
 ## Run it
 
 ```bash
 make lab N=arbitrate-agents-with-a-supervisor
 ```
+
+Expect: 4 passed
 
 ## Read
 

@@ -10,11 +10,30 @@ adverse event phrased as a dosing question can be answered instead of reported.
 **After:** the agents establish facts (`ae`, `in_scope`, `grounded` and so on) and plain code walks a fixed
 table, first match wins. Compliance reads the table; tests walk it.
 
+## Prerequisites
+
+[uv](https://docs.astral.sh/uv/) only. No Floci or API key is needed.
+
+## How it works
+
+```mermaid
+flowchart TD
+    A[A node sets its facts] --> B{Next rule fact is known}
+    B -->|no| C[Wait for the next node]
+    C --> A
+    B -->|yes and matches| D[Rule route is the decision]
+    B -->|yes and does not match| E[Try the next rule]
+    E --> B
+    D --> F[Kernel checks the route matches the facts]
+```
+
 ## Run it
 
 ```bash
 make lab N=route-inquiries-with-a-routing-table
 ```
+
+Expect: 5 passed
 
 ## Read
 

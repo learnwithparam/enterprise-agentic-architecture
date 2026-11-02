@@ -21,5 +21,10 @@ uv run pytest -q labs  # every lab; make check runs them too
 | [Pick the model with a router](pick-the-model-with-a-router/) | Haiku by default, Sonnet when asked, then a person | No |
 | [Bound agent plans with a policy kernel](bound-agent-plans-with-a-policy-kernel/) | A plan cannot skip a step, rewrite a fact or loop forever | No |
 | [Arbitrate agents with a supervisor](arbitrate-agents-with-a-supervisor/) | Policy settles two touches to one doctor, not a model | No |
+| [Keep a case alive with Temporal](keep-a-case-alive-with-temporal/) | An overdue review is escalated once and a late decision still lands | Yes, and Temporal |
+| [Isolate tenants with row level security](isolate-tenants-with-row-level-security/) | The database, not the code, refuses another tenant's rows | Yes |
+| [Retrieve behind a facet gate](retrieve-behind-a-facet-gate/) | Withdrawn, expired and foreign content is never a candidate | Yes |
+| [Let the guardian only tighten](let-the-guardian-only-tighten/) | Reviewers' rejections can switch a country off, never on | Yes |
+| [Watch with the sentinel and steward](watch-with-the-sentinel-and-steward/) | Safety signals and draft invalidation happen with nobody asking | Yes, and Temporal |
 
 Read `docs/architecture-walkthrough.md` first for how the parts fit together.
