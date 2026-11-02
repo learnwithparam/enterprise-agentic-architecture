@@ -24,6 +24,16 @@ needs credentials that must not sit here.
 - **CI runs the same gate** plus a secret scan (gitleaks), a dependency audit (pip-audit), a CycloneDX
   SBOM and CodeQL (`.github/workflows/ci.yml`). A nightly run catches a new advisory without a push.
   `tests/test_ci.py` fails if a step is dropped.
+- **A migration task runs before the service.** `MigrationTask` is a one-off Fargate task that runs
+  `python -m hcpagents.db` with the cluster owner's credentials. A custom resource starts it whenever the
+  image changes and waits for it; a non-zero exit fails the stack update, and both services depend on that
+  resource, so no new task starts on an old schema. `tests/test_deploy.py` reads the template for the edge.
+- **Blue/green through CodeDeploy.** The API service uses the CodeDeploy deployment controller with a green
+  target group and a test listener on port 9000. The group shifts 10 percent of traffic, waits five minutes,
+  then shifts the rest, and rolls back a failed deployment.
+- **A second region keeps the ledger.** `SecondRegion` holds one locked, encrypted bucket per tenant in
+  `eu-west-1`; each ledger bucket replicates into it. S3 names are global, so the copy carries its region in
+  its name (`replica_bucket`). Replication keeps the retention rule, and the test asserts both buckets lock.
 - **Synth only.** Nothing deploys from this repo. The two secrets (the Anthropic key and the
   `hcp_app` database URL) are created empty and filled in by hand.
 
@@ -33,5 +43,5 @@ needs credentials that must not sit here.
 - Temporal is an input (`-c temporal=host:7233`): Temporal Cloud or a self-hosted cluster, not part of
   this stack. ECS was chosen over EKS because the platform is two stateless services and one worker;
   nothing needs a cluster operator.
-- Not built: a migration job task, blue/green deploys, a second region for residency, and a Bedrock
-  failover adapter in the gateway.
+- Not deployed: the stacks synthesize and are checked, and the migration handler runs against a fake
+  ECS client. Running them on AWS needs an account (see Known limits in the case study).

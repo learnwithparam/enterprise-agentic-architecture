@@ -5,9 +5,11 @@ import os
 import aws_cdk as cdk
 from cdk_nag import AwsSolutionsChecks
 
-from stack import Platform
+from stack import REPLICA_REGION, Platform, SecondRegion
 
 app = cdk.App()
-Platform(app, "HcpPlatform", env=cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT", "123456789012"), region="eu-central-1"))
+account = os.environ.get("CDK_DEFAULT_ACCOUNT", "123456789012")
+Platform(app, "HcpPlatform", env=cdk.Environment(account=account, region="eu-central-1"))
+SecondRegion(app, "HcpSecondRegion", env=cdk.Environment(account=account, region=REPLICA_REGION))
 cdk.Validations.of(app).add_plugins(AwsSolutionsChecks(app))
 app.synth()

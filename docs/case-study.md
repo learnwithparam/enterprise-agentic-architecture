@@ -247,7 +247,7 @@ promotional content generation.
 **Known limits of this build.** A live Bedrock answer needs an AWS account: Floci returns a stub, so the tests
 prove the failover and the request translation, not the model's words. The CLI signs in with the authorization
 code flow and PKCE because Floci's Cognito has no device grant; AWS Cognito offers none either, so a
-device flow would need a separate service. The CDK stack has no migration task, blue/green deploy or second region. The `hcp_app` database role
+device flow would need a separate service. The CDK stack, with its migration task, blue/green deploy and second region, is synthesized and checked but never deployed from here. The `hcp_app` database role
 in `migrations/001_documents.sql` has a local-only password that production sets from Secrets Manager. The
 static console sets no content security policy of its own.
 

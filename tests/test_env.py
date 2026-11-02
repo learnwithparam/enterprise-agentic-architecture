@@ -28,3 +28,11 @@ def test_secret_file_is_ignored_and_not_tracked():
     tracked = subprocess.run(["git", "ls-files", "--error-unmatch", ENV_FILE], cwd=world.ROOT,
                              capture_output=True)
     assert tracked.returncode != 0, "the env file must never be tracked"
+
+
+def test_owner_url_is_built_from_the_cluster_secret_parts(monkeypatch):
+    from hcpagents import db
+    parts = {"DB_HOST": "db.internal", "DB_OWNER_USER": "admin", "DB_OWNER_PASSWORD": "p@ss/word"}
+    assert db.owner_url(parts) == "postgresql://admin:p%40ss%2Fword@db.internal:5432/hcp"
+    assert db.owner_url({**parts, "DATABASE_OWNER_URL": "postgresql://x"}) == "postgresql://x"
+    assert db.owner_url({}).startswith("postgresql://hcp_owner:")

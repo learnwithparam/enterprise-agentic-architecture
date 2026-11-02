@@ -8,6 +8,7 @@ Migrations run as the owner, the only place that role is used.
 
 import os
 from contextlib import contextmanager
+from urllib.parse import quote
 
 import psycopg
 from psycopg.rows import dict_row
@@ -15,7 +16,19 @@ from psycopg.rows import dict_row
 from hcpagents import world
 
 APP_URL = os.environ.get("DATABASE_URL", "postgresql://hcp_app:hcp_app@localhost:5433/hcp")
-OWNER_URL = os.environ.get("DATABASE_OWNER_URL", "postgresql://hcp_owner:hcp_owner@localhost:5433/hcp")
+
+
+def owner_url(env=os.environ) -> str:
+    """The migration role's URL: DATABASE_OWNER_URL, else built from the cluster secret's host, user and password
+    (how the ECS migration task receives them), else the local owner."""
+    if url := env.get("DATABASE_OWNER_URL"):
+        return url
+    if all(k in env for k in ("DB_HOST", "DB_OWNER_USER", "DB_OWNER_PASSWORD")):
+        return f"postgresql://{quote(env['DB_OWNER_USER'], safe='')}:{quote(env['DB_OWNER_PASSWORD'], safe='')}@{env['DB_HOST']}:5432/hcp"
+    return "postgresql://hcp_owner:hcp_owner@localhost:5433/hcp"
+
+
+OWNER_URL = owner_url()
 MIGRATIONS = world.ROOT / "migrations"
 
 DEFAULT_TENANT, current_tenant, as_tenant = world.DEFAULT_TENANT, world.current_tenant, world.as_tenant
@@ -65,3 +78,7 @@ def wipe() -> None:
         with as_tenant(t["id"]), session() as conn:
             conn.execute("DELETE FROM docs")
             conn.execute("DELETE FROM content_index")
+
+
+if __name__ == "__main__":  # the ECS migration task: python -m hcpagents.db
+    print("migrations applied:", ", ".join(migrate()) or "none new")

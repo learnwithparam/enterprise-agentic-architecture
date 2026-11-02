@@ -9,18 +9,22 @@ from pathlib import Path
 import aws_cdk as cdk
 from aws_cdk import (
     aws_bedrock as bedrock,
+    aws_codedeploy as codedeploy,
     aws_cognito as cognito,
     aws_ec2 as ec2,
     aws_ecs as ecs,
     aws_ecs_patterns as patterns,
     aws_elasticache as elasticache,
+    aws_elasticloadbalancingv2 as elbv2,
     aws_iam as iam,
     aws_kms as kms,
+    aws_lambda as lambda_,
     aws_logs as logs,
     aws_rds as rds,
     aws_s3 as s3,
     aws_secretsmanager as secrets,
     aws_verifiedpermissions as avp,
+    custom_resources as cr,
 )
 from constructs import Construct
 
@@ -28,11 +32,28 @@ ROOT = Path(__file__).resolve().parent.parent
 TENANTS = ("quillon", "marlowe")
 MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5")  # the two allowed models (ADR 0007)
 LEDGER_RETENTION_YEARS = 7
+REPLICA_REGION = "eu-west-1"  # where every ledger entry is also kept (ADR 0029)
+
+
+def replica_bucket(tenant: str, account: str) -> str:
+    """S3 names are global, so the second region's bucket carries its region in the name."""
+    return f"hcp-ledger-{tenant}-{account}-{REPLICA_REGION}"
+
+
+def replica_alias(tenant: str) -> str:
+    return f"alias/hcp-ledger-replica-{tenant}"
 
 
 def suppress(node: Construct, rule: str, reason: str) -> None:
     """Acknowledge one cdk-nag finding on one construct, with the reason it is acceptable."""
     cdk.Validations.of(node).acknowledge(cdk.Acknowledgment(id=rule, reason=reason))
+
+
+def access_log_bucket(scope: Construct) -> s3.Bucket:
+    b = s3.Bucket(scope, "AccessLogs", block_public_access=s3.BlockPublicAccess.BLOCK_ALL, enforce_ssl=True,
+                  encryption=s3.BucketEncryption.S3_MANAGED, versioned=True, removal_policy=cdk.RemovalPolicy.RETAIN)
+    suppress(b, "AwsSolutions-S1", "This is the access-log bucket; logging it would only point at itself.")
+    return b
 
 
 class Platform(cdk.Stack):
@@ -61,20 +82,44 @@ class Platform(cdk.Stack):
         return vpc
 
     def access_logs(self) -> s3.Bucket:
-        b = s3.Bucket(self, "AccessLogs", block_public_access=s3.BlockPublicAccess.BLOCK_ALL, enforce_ssl=True,
-                      encryption=s3.BucketEncryption.S3_MANAGED, versioned=True, removal_policy=cdk.RemovalPolicy.RETAIN)
-        suppress(b, "AwsSolutions-S1", "This is the access-log bucket; logging it would only point at itself.")
-        return b
+        return access_log_bucket(self)
 
     def ledger(self, tenant: str) -> s3.Bucket:
         """WORM storage for the hash-chained ledger: nobody, including an admin, edits an entry in its retention."""
-        return s3.Bucket(
+        bucket = s3.Bucket(
             self, f"Ledger-{tenant}", object_lock_enabled=True,
             object_lock_default_retention=s3.ObjectLockRetention.compliance(cdk.Duration.days(365 * LEDGER_RETENTION_YEARS)),
             encryption=s3.BucketEncryption.KMS, encryption_key=self.keys[tenant], bucket_key_enabled=True,
             versioned=True, block_public_access=s3.BlockPublicAccess.BLOCK_ALL, enforce_ssl=True,
             server_access_logs_bucket=self.logs_bucket, server_access_logs_prefix=f"ledger-{tenant}/",
             removal_policy=cdk.RemovalPolicy.RETAIN)
+        self.replicate(tenant, bucket)
+        return bucket
+
+    def replicate(self, tenant: str, bucket: s3.Bucket) -> None:
+        """Every entry is copied, encrypted, to the second region's locked bucket (SecondRegion below)."""
+        role = iam.Role(self, f"Replication-{tenant}", assumed_by=iam.ServicePrincipal("s3.amazonaws.com"))
+        replica = f"arn:aws:s3:::{replica_bucket(tenant, self.account)}"
+        replica_key = f"arn:aws:kms:{REPLICA_REGION}:{self.account}:{replica_alias(tenant)}"
+        role.add_to_policy(iam.PolicyStatement(actions=["s3:GetReplicationConfiguration", "s3:ListBucket"], resources=[bucket.bucket_arn]))
+        role.add_to_policy(iam.PolicyStatement(
+            actions=["s3:GetObjectVersionForReplication", "s3:GetObjectVersionAcl", "s3:GetObjectVersionTagging", "s3:GetObjectRetention", "s3:GetObjectLegalHold"],
+            resources=[bucket.arn_for_objects("*")]))
+        role.add_to_policy(iam.PolicyStatement(
+            actions=["s3:ReplicateObject", "s3:ReplicateTags", "s3:ObjectOwnerOverrideToBucketOwner"], resources=[f"{replica}/*"]))
+        role.add_to_policy(iam.PolicyStatement(actions=["kms:Decrypt"], resources=[self.keys[tenant].key_arn]))
+        role.add_to_policy(iam.PolicyStatement(actions=["kms:Encrypt", "kms:GenerateDataKey"], resources=[replica_key]))
+        source = self.get_logical_id(bucket.node.default_child)
+        suppress(role, f"AwsSolutions-IAM5[Resource::<{source}.Arn>/*]", f"{tenant} ledger: replication reads every object version, so the object path is the resource.")
+        suppress(role, f"AwsSolutions-IAM5[Resource::arn:aws:s3:::{replica_bucket(tenant, self.account)}/*]", f"{tenant} replica: replication writes every object, so the object path is the resource.")
+        bucket.node.default_child.replication_configuration = s3.CfnBucket.ReplicationConfigurationProperty(
+            role=role.role_arn, rules=[s3.CfnBucket.ReplicationRuleProperty(
+                id=f"to-{REPLICA_REGION}", status="Enabled", priority=1, filter=s3.CfnBucket.ReplicationRuleFilterProperty(prefix=""),
+                delete_marker_replication=s3.CfnBucket.DeleteMarkerReplicationProperty(status="Disabled"),
+                source_selection_criteria=s3.CfnBucket.SourceSelectionCriteriaProperty(
+                    sse_kms_encrypted_objects=s3.CfnBucket.SseKmsEncryptedObjectsProperty(status="Enabled")),
+                destination=s3.CfnBucket.ReplicationDestinationProperty(
+                    bucket=replica, encryption_configuration=s3.CfnBucket.EncryptionConfigurationProperty(replica_kms_key_id=replica_key)))])
 
     def postgres(self) -> rds.DatabaseCluster:
         db = rds.DatabaseCluster(
@@ -141,11 +186,13 @@ class Platform(cdk.Stack):
         env = {"MI_VALKEY": f"valkeys://{self.cache.attr_endpoint_address}:6379/0", "MI_TEMPORAL": self.node.try_get_context("temporal") or "temporal.internal:7233"}
         keys = {"ANTHROPIC_API_KEY": ecs.Secret.from_secrets_manager(anthropic), "DATABASE_URL": ecs.Secret.from_secrets_manager(db_url)}
         image = ecs.ContainerImage.from_asset(str(ROOT))
+        migrated = self.migration(cluster, image)
         api = patterns.ApplicationLoadBalancedFargateService(
             self, "Api", cluster=cluster, cpu=512, memory_limit_mib=1024, desired_count=2, public_load_balancer=True,
             task_image_options=patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=image, container_port=8765, task_role=role, environment=env, enable_logging=True,
                 secrets=keys),
+            deployment_controller=ecs.DeploymentController(type=ecs.DeploymentControllerType.CODE_DEPLOY),
             health_check_grace_period=cdk.Duration.seconds(60), security_groups=[self.app_sg])
         api.target_group.configure_health_check(path="/api/health")
         api.load_balancer.log_access_logs(self.logs_bucket, "alb")
@@ -158,6 +205,70 @@ class Platform(cdk.Stack):
             self, "Worker", cluster=cluster, desired_count=2, security_groups=[self.app_sg], task_definition=self.worker_task(image, role, env, keys))
         self.database.connections.allow_default_port_from(api.service)
         self.database.connections.allow_default_port_from(worker)
+        for service in (api.service, worker):
+            service.node.add_dependency(migrated)  # the schema is current before any new task starts
+        self.blue_green(api)
+
+    def migration(self, cluster: ecs.Cluster, image) -> cdk.CustomResource:
+        """Runs `python -m hcpagents.db` as a one-off task whenever the image changes, and fails the deploy if it fails."""
+        task = ecs.FargateTaskDefinition(self, "MigrationTask", cpu=256, memory_limit_mib=512)
+        db = self.database.secret
+        task.add_container(
+            "migrate", image=image, command=["python", "-m", "hcpagents.db"],
+            secrets={"DB_HOST": ecs.Secret.from_secrets_manager(db, "host"), "DB_OWNER_USER": ecs.Secret.from_secrets_manager(db, "username"),
+                     "DB_OWNER_PASSWORD": ecs.Secret.from_secrets_manager(db, "password")},
+            logging=ecs.LogDrivers.aws_logs(stream_prefix="migrate", log_retention=logs.RetentionDays.ONE_YEAR))
+        suppress(task.execution_role, "AwsSolutions-IAM5[Resource::*]", "ECR GetAuthorizationToken has no resource-level form.")
+        self.database.connections.allow_default_port_from(self.app_sg)
+        code = lambda_.Code.from_inline((ROOT / "deploy" / "migrate_handler.py").read_text())
+        handlers = {name: lambda_.Function(self, f"Migration-{name}", runtime=lambda_.Runtime.PYTHON_3_13, handler=f"index.{name}", code=code,
+                                           timeout=cdk.Duration.minutes(1),
+                                           log_group=logs.LogGroup(self, f"MigrationLogs-{name}", retention=logs.RetentionDays.ONE_YEAR, removal_policy=cdk.RemovalPolicy.RETAIN))
+                    for name in ("on_event", "is_complete")}
+        handlers["on_event"].add_to_role_policy(iam.PolicyStatement(actions=["ecs:RunTask"], resources=[task.task_definition_arn]))
+        handlers["on_event"].add_to_role_policy(iam.PolicyStatement(actions=["iam:PassRole"], resources=[task.task_role.role_arn, task.execution_role.role_arn]))
+        handlers["is_complete"].add_to_role_policy(iam.PolicyStatement(actions=["ecs:DescribeTasks"], resources=["*"]))
+        for fn in handlers.values():
+            suppress(fn, "AwsSolutions-L1", "The runtime is pinned so a deploy never changes behaviour underneath the migration.")
+        suppress(handlers["is_complete"], "AwsSolutions-IAM5[Resource::*]", "ecs:DescribeTasks has no resource-level form for a task the handler has just been told about.")
+        provider = cr.Provider(self, "MigrationProvider", on_event_handler=handlers["on_event"], is_complete_handler=handlers["is_complete"],
+                               query_interval=cdk.Duration.seconds(15), total_timeout=cdk.Duration.minutes(15),
+                               log_group=logs.LogGroup(self, "MigrationProviderLogs", retention=logs.RetentionDays.ONE_YEAR, removal_policy=cdk.RemovalPolicy.RETAIN))
+        basic = "AwsSolutions-IAM4[Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole]"
+        suppress(provider, basic, "The provider framework uses the Lambda basic-execution managed policy, which only writes its own logs.")
+        suppress(provider, "AwsSolutions-L1", "The provider framework's runtime is set by the CDK release.")
+        suppress(provider, "AwsSolutions-SF1", "The provider's waiter state machine is CDK-generated and logs through its handlers.")
+        suppress(provider, "AwsSolutions-SF2", "The provider's waiter state machine is CDK-generated and has nothing to trace beyond its handlers.")
+        for fn in (*handlers.values(), *(c for c in provider.node.children if isinstance(c, lambda_.Function))):
+            logical = self.get_logical_id(fn.node.default_child)
+            suppress(provider, f"AwsSolutions-IAM5[Resource::<{logical}.Arn>:*]", "The provider framework may invoke any version of its own handlers.")
+        for fn in handlers.values():
+            suppress(fn, basic, "The Lambda basic-execution managed policy only writes the function's own logs.")
+        resource = cdk.CustomResource(
+            self, "Migrate", service_token=provider.service_token,
+            properties={"Cluster": cluster.cluster_arn, "TaskDefinition": task.task_definition_arn,
+                        "Subnets": self.vpc.select_subnets(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS).subnet_ids,
+                        "SecurityGroups": [self.app_sg.security_group_id]})
+        resource.node.add_dependency(self.database)
+        return resource
+
+    def blue_green(self, api: patterns.ApplicationLoadBalancedFargateService) -> codedeploy.EcsDeploymentGroup:
+        """CodeDeploy shifts 10 percent of traffic to the new task set, waits five minutes, then the rest. A failed
+        health check or deployment sends it back. The test listener lets a check hit the new tasks first."""
+        green = elbv2.ApplicationTargetGroup(
+            self, "Green", vpc=self.vpc, port=8765, protocol=elbv2.ApplicationProtocol.HTTP, target_type=elbv2.TargetType.IP,
+            health_check=elbv2.HealthCheck(path="/api/health"))
+        test = api.load_balancer.add_listener("Test", port=9000, protocol=elbv2.ApplicationProtocol.HTTP, open=False)
+        test.add_target_groups("Green", target_groups=[green])
+        group = codedeploy.EcsDeploymentGroup(
+            self, "BlueGreen", service=api.service, deployment_config=codedeploy.EcsDeploymentConfig.CANARY_10_PERCENT_5_MINUTES,
+            blue_green_deployment_config=codedeploy.EcsBlueGreenDeploymentConfig(
+                blue_target_group=api.target_group, green_target_group=green, listener=api.listener, test_listener=test,
+                termination_wait_time=cdk.Duration.minutes(5)),
+            auto_rollback=codedeploy.AutoRollbackConfig(failed_deployment=True, deployment_in_alarm=False))
+        suppress(group, "AwsSolutions-IAM4[Policy::arn:<AWS::Partition>:iam::aws:policy/AWSCodeDeployRoleForECS]",
+                 "AWS publishes this policy for CodeDeploy to shift ECS traffic; it is the documented service role.")
+        return group
 
     def worker_task(self, image, role, env, keys) -> ecs.FargateTaskDefinition:
         task = ecs.FargateTaskDefinition(self, "WorkerTask", cpu=512, memory_limit_mib=1024, task_role=role)
@@ -168,3 +279,20 @@ class Platform(cdk.Stack):
         suppress(task, "AwsSolutions-ECS2", "Environment holds hostnames only; every secret comes from Secrets Manager.")
         suppress(task.execution_role, "AwsSolutions-IAM5[Resource::*]", "ECR GetAuthorizationToken has no resource-level form.")
         return task
+
+
+class SecondRegion(cdk.Stack):
+    """Where the ledger is also kept: one locked, encrypted bucket per tenant that Platform replicates into."""
+
+    def __init__(self, scope: Construct, id: str, **kw):
+        super().__init__(scope, id, **kw)
+        self.logs_bucket = access_log_bucket(self)
+        self.replicas = {}
+        for t in TENANTS:
+            key = kms.Key(self, f"Key-{t}", enable_key_rotation=True, alias=replica_alias(t))
+            self.replicas[t] = s3.Bucket(
+                self, f"Ledger-{t}", bucket_name=replica_bucket(t, self.account), object_lock_enabled=True,
+                object_lock_default_retention=s3.ObjectLockRetention.compliance(cdk.Duration.days(365 * LEDGER_RETENTION_YEARS)),
+                encryption=s3.BucketEncryption.KMS, encryption_key=key, bucket_key_enabled=True, versioned=True,
+                block_public_access=s3.BlockPublicAccess.BLOCK_ALL, enforce_ssl=True,
+                server_access_logs_bucket=self.logs_bucket, server_access_logs_prefix=f"ledger-{t}/", removal_policy=cdk.RemovalPolicy.RETAIN)
