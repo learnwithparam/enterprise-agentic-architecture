@@ -83,12 +83,17 @@ def events():
 
 
 def autonomy(reset: bool = False):
-    ssm = client("ssm")
-    for code, topics in world.autonomy_seed()["auto_send"].items():
-        name = f"/mi/autonomy/{code}"
-        if reset or not _exists(lambda: ssm.get_parameter(Name=name)):
-            value = json.dumps({"enabled": True, "topics": topics})
-            ssm.put_parameter(Name=name, Value=value, Type="String", Overwrite=True)
+    """Every tenant starts with the seeded countries switched on. Provisioning again leaves a changed switch alone."""
+    from hcpagents import cases
+    for t in world.tenants():
+        with world.as_tenant(t["id"]):
+            for code, topics in world.autonomy_seed()["auto_send"].items():
+                try:
+                    present = bool(cases.autonomy_setting(code))
+                except KeyError:
+                    present = False
+                if reset or not present:
+                    cases.save_autonomy(code, {"enabled": True, "topics": topics})
 
 
 def policy_store() -> str:

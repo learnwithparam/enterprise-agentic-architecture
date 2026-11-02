@@ -26,7 +26,7 @@ async def lifespan(_app: FastAPI):
                 yield
                 return
             client = await durable.connect()
-            async with durable.worker(client):
+            async with durable.workers(client):
                 await durable.start_steward(client)
                 await durable.ensure_schedules(client)
                 yield

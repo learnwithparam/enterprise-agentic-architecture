@@ -1,6 +1,5 @@
 """Let the guardian only tighten: it can switch a country off, never on, and the improver only proposes."""
 
-import json
 from datetime import UTC, datetime
 
 import pytest
@@ -34,8 +33,7 @@ def test_reviewers_who_reject_too_much_switch_a_country_off():
 
 def test_a_spotless_record_never_switches_a_country_back_on():
     start = datetime.now(UTC)
-    cases.client("ssm").put_parameter(Name="/mi/autonomy/DE", Type="String", Overwrite=True,
-                                      Value=json.dumps(cases.autonomy_setting("DE") | {"enabled": False}))
+    cases.save_autonomy("DE", cases.autonomy_setting("DE") | {"enabled": False})
     review("DE", approved=9, rejected=0)
     assert guardian.patrol(start) == [] and not cases.autonomy_setting("DE")["enabled"]
 

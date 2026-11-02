@@ -32,7 +32,8 @@ def raw_storage() -> str:
     """Everything the ledger puts in DynamoDB and S3, as one string."""
     ddb, s3 = client("dynamodb"), client("s3")
     rows = ddb.scan(TableName=ledger.TABLE)["Items"]
-    objs = s3.list_objects_v2(Bucket=ledger.ARCHIVE).get("Contents", [])
+    # The locked archive keeps every older epoch for good (a mutant run can leave plaintext there), so only this epoch is the run under test.
+    objs = s3.list_objects_v2(Bucket=ledger.ARCHIVE, Prefix=f"ledger/{ledger._epoch()}/").get("Contents", [])
     bodies = [s3.get_object(Bucket=ledger.ARCHIVE, Key=o["Key"])["Body"].read().decode() for o in objs]
     return json.dumps(rows) + "".join(bodies)
 

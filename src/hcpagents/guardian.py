@@ -5,11 +5,9 @@ it switches that country's automatic replies off. It cannot switch anything on: 
 cases.set_autonomy, and the count starts again from that moment.
 """
 
-import json
 from datetime import datetime
 
 from hcpagents import cases, ledger, store, world
-from hcpagents.aws import client
 
 DECISIONS = ("approved", "rejected")
 CHANGES = ("autonomy_changed", "guardian_lowered")
@@ -49,8 +47,7 @@ def patrol(since: datetime | None = None) -> list[dict]:
         s = cases.autonomy_setting(country)
         if not s["enabled"]:
             continue
-        client("ssm").put_parameter(Name=f"/mi/autonomy/{country}", Value=json.dumps(s | {"enabled": False}),
-                                    Type="String", Overwrite=True)
+        cases.save_autonomy(country, s | {"enabled": False})
         ledger.append({"type": "guardian_lowered", "country": country, "override_rate": r["override_rate"],
                        "reviewed": r["reviewed"], "limit": limits["max_override_rate"]})
         lowered.append({"country": country, **r})

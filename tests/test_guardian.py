@@ -1,6 +1,5 @@
 """The guardian only tightens, the improver only proposes, and the red-team corpus never gets through (ADR 0026)."""
 
-import json
 from datetime import UTC, datetime
 
 import pytest
@@ -38,8 +37,7 @@ def test_reviewers_who_reject_too_much_switch_a_country_off_and_a_human_switches
     assert cases.autonomy_setting("US")["enabled"]
     assert any(r["entry"]["type"] == "guardian_lowered" for r in ledger.entries())
     # a human switches it back on: the old rejections no longer count
-    cases.client("ssm").put_parameter(Name="/mi/autonomy/DE", Type="String", Overwrite=True,
-                                      Value=json.dumps(cases.autonomy_setting("DE") | {"enabled": True}))
+    cases.save_autonomy("DE", cases.autonomy_setting("DE") | {"enabled": True})
     ledger.append({"type": "autonomy_changed", "country": "DE", "enabled": True, "user": "u-test"})
     assert guardian.patrol(start) == [] and cases.autonomy_setting("DE")["enabled"]
 
@@ -56,8 +54,7 @@ def test_a_few_decisions_or_a_low_override_rate_change_nothing():
 def test_the_guardian_never_raises_autonomy():
     infra.provision(reset=True)
     start = datetime.now(UTC)
-    cases.client("ssm").put_parameter(Name="/mi/autonomy/DE", Type="String", Overwrite=True,
-                                      Value=json.dumps(cases.autonomy_setting("DE") | {"enabled": False}))
+    cases.save_autonomy("DE", cases.autonomy_setting("DE") | {"enabled": False})
     review("DE", approved=9, rejected=0)  # a spotless record
     assert guardian.patrol(start) == []
     assert not cases.autonomy_setting("DE")["enabled"]

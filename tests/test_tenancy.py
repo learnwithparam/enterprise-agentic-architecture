@@ -89,3 +89,70 @@ def test_no_api_route_is_registered_after_the_page_catch_all():
     paths = [getattr(r, "path", "") for r in api.app.routes]
     if "/{page:path}" in paths:
         assert not [p for p in paths[paths.index("/{page:path}"):] if p.startswith("/api/")]
+
+
+def test_autonomy_settings_isolated():
+    """One tenant switching Germany off leaves every other tenant's Germany on, and a row for another tenant is refused."""
+    from hcpagents import cases, world
+    a, b = [t["id"] for t in world.tenants()][:2]
+    with world.as_tenant(b):
+        cases.save_autonomy("DE", cases.autonomy_setting("DE") | {"enabled": False})
+        assert cases.autonomy_setting("DE")["enabled"] is False
+    with world.as_tenant(a):
+        assert cases.autonomy_setting("DE")["enabled"] is True
+        with db.session() as conn, pytest.raises(psycopg.errors.InsufficientPrivilege):
+            conn.execute("INSERT INTO autonomy (tenant_id, country, enabled) VALUES (%s, 'FR', true)", (b,))
+
+
+def test_autonomy_policy_is_in_the_migration():
+    sql = (db.MIGRATIONS / "007_autonomy.sql").read_text()
+    assert "FORCE ROW LEVEL SECURITY" in sql and "WITH CHECK" in sql
+
+
+def test_queue_per_tenant(monkeypatch):
+    import asyncio
+    from hcpagents import durable, world
+    ids = [t["id"] for t in world.tenants()]
+    queues = [durable.queue_for(t) for t in ids]
+    assert len(set(queues)) == len(ids) >= 2 and durable.PLATFORM_QUEUE not in queues
+    started = []
+    monkeypatch.setattr(durable, "worker", lambda client, queue=None, acts=None: _Recorder(started, queue))
+
+    async def go():
+        async with durable.workers(object()):
+            pass
+    asyncio.run(go())
+    assert started == [durable.PLATFORM_QUEUE, *queues]
+
+
+class _Recorder:
+    def __init__(self, started, queue):
+        self.started, self.queue = started, queue
+
+    async def __aenter__(self):
+        self.started.append(self.queue)
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def test_worker_ignores_other_tenant_queue():
+    """A case on one tenant's queue is never picked up by a worker that serves another tenant's queue."""
+    import asyncio
+    import uuid
+    from hcpagents import durable, world
+    from hcpagents.workflows import InquiryWorkflow
+    a, b = [t["id"] for t in world.tenants()][:2]
+
+    async def go():
+        client = await durable.connect()
+        wid = f"isolation-{uuid.uuid4().hex[:8]}"
+        handle = await client.start_workflow(InquiryWorkflow.run, {"tenant": a, "inquiry_id": "inq-101", "inquiry": None},
+                                             id=wid, task_queue=durable.queue_for(a))
+        try:
+            async with durable.worker(client, durable.queue_for(b)):
+                with pytest.raises(asyncio.TimeoutError):
+                    await asyncio.wait_for(handle.result(), 3)
+        finally:
+            await handle.terminate()
+    asyncio.run(go())

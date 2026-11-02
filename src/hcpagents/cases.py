@@ -7,8 +7,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 
-from hcpagents import agents, authz, cache, events, grounding, ledger, observe, plan, releases, rules, store, tracing, world
-from hcpagents.aws import client
+from hcpagents import agents, authz, cache, db, events, grounding, ledger, observe, plan, releases, rules, store, tracing, world
 from hcpagents.kernel import ORDER, KernelViolation, escalation, run as run_graph
 
 STATUS = {
@@ -22,7 +21,21 @@ STATUS = {
 
 
 def autonomy_setting(country: str) -> dict:
-    return json.loads(client("ssm").get_parameter(Name=f"/mi/autonomy/{country}")["Parameter"]["Value"])
+    """What the current tenant has granted for a country. The row is behind the tenant's policy."""
+    with db.session() as conn:
+        row = conn.execute("SELECT enabled, topics FROM autonomy WHERE country = %s", (country,)).fetchone()
+    if row is None:
+        raise KeyError(f"No autonomy setting for {country} for tenant {world.current_tenant()}")
+    return {"enabled": row["enabled"], "topics": row["topics"]}
+
+
+def save_autonomy(country: str, setting: dict) -> None:
+    """The one writer of a tenant's autonomy: the human switch and the guardian both come through here."""
+    with db.session() as conn:
+        conn.execute(
+            "INSERT INTO autonomy (tenant_id, country, enabled, topics) VALUES (current_setting('app.tenant_id'), %s, %s, %s) "
+            "ON CONFLICT (tenant_id, country) DO UPDATE SET enabled = EXCLUDED.enabled, topics = EXCLUDED.topics, updated_at = now()",
+            (country, setting["enabled"], json.dumps(setting["topics"])))
 
 
 class Case:
@@ -334,7 +347,7 @@ def set_autonomy(country: str, enabled: bool, user: dict) -> dict:
     if not ok:
         raise Denied(f"{user['name']} may not change automatic replies. {why}")
     s = autonomy_setting(country) | {"enabled": enabled}
-    client("ssm").put_parameter(Name=f"/mi/autonomy/{country}", Value=json.dumps(s), Type="String", Overwrite=True)
+    save_autonomy(country, s)
     ledger.append({"type": "autonomy_changed", "country": country, "enabled": enabled, "user": user["id"]})
     return s
 
