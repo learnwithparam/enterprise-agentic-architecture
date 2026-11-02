@@ -144,3 +144,20 @@ def test_lab_readme_shape():
         if not re.search(r"^## Break it", text, re.M):
             problems.append(f"{lab.name}: no Break it section")
     assert not problems, "\n".join(problems)
+
+
+def test_known_limits_match_floci():
+    """The case study lists exactly the limits floci-support.md records, so a limit cannot be added or dropped in one place."""
+    def bullets(text: str) -> list[str]:
+        return [" ".join(b.split()) for b in re.findall(r"^- (.+?)(?=\n(?:- |\n|$))", text, re.M | re.S)]
+    floci = (DOCS / "floci-support.md").read_text().split("## Limits that remain")[1]
+    study = (DOCS / "case-study.md").read_text().split("**Known limits of this build.**")[1].split("**Built, not left out.**")[0]
+    assert bullets(floci) and bullets(floci) == bullets(study)
+
+
+def test_walkthrough_has_the_six_sections_and_two_diagrams():
+    """The start-here walkthrough keeps its problem-first shape, so it can be cut into an explainer."""
+    text = (DOCS / "walkthrough.md").read_text()
+    assert re.findall(r"^## (.+)$", text, re.M) == [
+        "The problem", "What you build", "How it works", "Run it", "What to watch for", "Where to go next"]
+    assert text.count("```mermaid") >= 2

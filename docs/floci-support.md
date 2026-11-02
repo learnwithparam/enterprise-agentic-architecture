@@ -18,3 +18,4 @@ The platform runs its AWS code against [Floci](https://floci.io/) 2.3.0 on `loca
 
 - A live Bedrock model answer needs an AWS account. Floci returns a stub, so the labs prove failover and the request translation, not the model's words.
 - Cognito has no device-code grant, here or on AWS. The `hcp` CLI signs in with the authorization code flow and PKCE against a loopback redirect.
+- The CDK stack, with its migration task, blue/green deploy and second region, is synthesized and checked by tests but never deployed from here: Floci does not run the RDS, load balancer and CodeDeploy parts the stack needs.

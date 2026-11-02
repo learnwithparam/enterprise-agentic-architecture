@@ -3,7 +3,7 @@
 import asyncio
 import sys
 
-from hcpagents import agents, cases, gateway, world
+from hcpagents import agents, cases, evals, gateway, world
 
 
 async def main(target: str) -> None:
@@ -15,6 +15,8 @@ async def main(target: str) -> None:
         print(f"{i:22} {d['route']:11} expect {inq['expect']:11} {'ok ' if ok else 'MISS'} ${d['cost_usd']:.5f} {d['mode']}")
     if agents.live():
         print(f"live spend this run: ${agents.SPEND.session:.5f}")
+        if target == "all":
+            evals.write_evidence(await evals.inquiry_keys())
 
 
 if __name__ == "__main__":

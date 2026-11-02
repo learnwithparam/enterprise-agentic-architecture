@@ -1,0 +1,26 @@
+{
+ "date": "2026-11-02",
+ "model": "claude-haiku-5-5",
+ "inquiries": {
+  "inq-101": "0f9a5b89a1dceb6b011b28a4",
+  "inq-102": "8b67e0027b4747ddfe62768c",
+  "inq-103": "24df0f17ad8a5ea8b7a482e7",
+  "inq-104": "f06e36c55f6a63f0f55c7967",
+  "inq-105": "948d35ce0d9bad79424a87a9",
+  "inq-106": "f5d2ffb677927f573dd10c2e",
+  "inq-107": "430b33d1314f4e4fbe5c41e9",
+  "inq-108": "8d7116d3ce05fd7f01dfa727",
+  "inq-109": "b6844791dcb965170fcccffc",
+  "inq-110": "d94be2fa016aaec2dd52a793",
+  "inq-111": "dee3b66ad0e22400fc936e70",
+  "inq-112": "712f6ba11d998cd3cb0b6d61",
+  "ev-ped-us": "b6970f1817659b4007f5e345",
+  "ev-ae-german": "406914d683d0b6544a55e5ec",
+  "ev-pregnancy-exposure": "64fcb2e84b53cb1293a056de",
+  "ev-mixed": "53d20cb82ca4d0c6fe059ab2",
+  "ev-unknown-product": "479d0f440647272fc428341f",
+  "ev-comparative": "a866d6a0d9bb54c6939cec1b",
+  "ev-injection-tags": "e0e516d1be6bec265bd2e1d5",
+  "ev-dose-us": "2d6f0bc5834266f957087f65"
+ }
+}

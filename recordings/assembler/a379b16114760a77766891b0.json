@@ -30,21 +30,21 @@
  ],
  "usage": {
   "input_tokens": 4,
-  "output_tokens": 316,
-  "cache_read_input_tokens": 2550,
-  "cache_creation_input_tokens": 1103
+  "output_tokens": 312,
+  "cache_read_input_tokens": 2364,
+  "cache_creation_input_tokens": 1101
  },
  "model_usage": {
   "claude-haiku-5-5": {
    "inputTokens": 4,
-   "outputTokens": 316
+   "outputTokens": 312
   }
  },
- "cost_usd": 0.000405,
+ "cost_usd": 0.0004,
  "agent": "assembler",
  "key": "a379b16114760a77766891b0",
  "prompt_version": "2026-10-29.1",
  "model": "claude-haiku-5-5",
  "user_prompt": "{\"product\": \"VEL\", \"country\": \"JP\", \"questions\": [{\"text\": \"What is the Veltrona dose for psoriatic arthritis?\", \"topic\": \"dosing\"}]}",
- "recorded_at": "2026-10-29T14:54:46+00:00"
+ "recorded_at": "2026-11-02T11:59:15+00:00"
 }

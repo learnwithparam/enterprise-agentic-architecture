@@ -4,6 +4,7 @@ uv run python -m hcpagents.evals     replay (free); exits non-zero when the gate
 """
 
 import asyncio
+import hashlib
 import json
 import sys
 import tomllib
@@ -12,6 +13,7 @@ from hcpagents import agents, cases, infra, redteam, releases, world
 
 GATE = world.ROOT / "evals" / "gate.toml"
 REPORT = world.ROOT / "evals" / "report.json"
+EVIDENCE = world.ROOT / "evidence" / "live.json"
 
 
 async def run_all() -> list[dict]:
@@ -27,6 +29,23 @@ async def run_all() -> list[dict]:
             "why": inq["why"], "decision": d["decision"]["why"],
         })
     return rows
+
+
+def inquiry_key(decision: dict) -> str:
+    """One key per inquiry: the recording keys of the agents that ran on it, so a prompt edit changes exactly its inquiries."""
+    calls = sorted(f"{a['agent']}:{a['key']}" for a in decision["agent_calls"])
+    return hashlib.sha256("|".join(calls).encode()).hexdigest()[:24]
+
+
+async def inquiry_keys() -> dict[str, str]:
+    return {inq["id"]: inquiry_key(await cases.run(inq["id"])) for inq in world.inquiries()}
+
+
+def write_evidence(keys: dict[str, str]) -> None:
+    from datetime import UTC, datetime
+    EVIDENCE.parent.mkdir(exist_ok=True)
+    EVIDENCE.write_text(json.dumps({"date": datetime.now(UTC).date().isoformat(), "model": agents.MODEL, "inquiries": keys},
+                                   indent=1) + "\n")
 
 
 def _rec(call: dict) -> dict:

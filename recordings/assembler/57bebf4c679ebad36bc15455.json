@@ -30,21 +30,21 @@
  ],
  "usage": {
   "input_tokens": 4,
-  "output_tokens": 591,
-  "cache_read_input_tokens": 2555,
-  "cache_creation_input_tokens": 1181
+  "output_tokens": 634,
+  "cache_read_input_tokens": 2369,
+  "cache_creation_input_tokens": 1183
  },
  "model_usage": {
   "claude-haiku-5-5": {
    "inputTokens": 4,
-   "outputTokens": 591
+   "outputTokens": 634
   }
  },
- "cost_usd": 0.000558,
+ "cost_usd": 0.000578,
  "agent": "assembler",
  "key": "57bebf4c679ebad36bc15455",
  "prompt_version": "2026-10-29.1",
  "model": "claude-haiku-5-5",
  "user_prompt": "{\"product\": \"VEL\", \"country\": \"US\", \"questions\": [{\"text\": \"What is the usual daily dose of Veltrona for adult plaque psoriasis?\", \"topic\": \"dosing\"}]}",
- "recorded_at": "2026-10-29T14:55:46+00:00"
+ "recorded_at": "2026-11-02T12:00:10+00:00"
 }
