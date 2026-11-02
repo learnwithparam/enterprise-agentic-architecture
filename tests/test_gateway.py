@@ -104,7 +104,8 @@ def test_a_call_without_a_valid_key_is_refused(via):
     gw = via(fake)
     key = gateway.issue_key("quillon", "triage", 1.0)
     assert (gw.post("sk-ant-the-real-provider-key", body())).status_code == 401
-    assert (gw.post(key[:-1] + "x", body())).status_code == 401
+    tampered = key[:-1] + ("y" if key[-1] == "x" else "x")  # always differs, whatever the random last character is
+    assert (gw.post(tampered, body())).status_code == 401
     gateway.revoke("quillon", key)
     assert (gw.post(key, body())).status_code == 401 and not seen
 
