@@ -4,6 +4,7 @@ Each tenant gets its own KMS key and its own locked ledger bucket, so one tenant
 by destroying its key. The task role may call Bedrock for the two allowed models and no others.
 """
 
+import json
 from pathlib import Path
 
 import aws_cdk as cdk
@@ -29,6 +30,7 @@ from aws_cdk import (
 from constructs import Construct
 
 ROOT = Path(__file__).resolve().parent.parent
+APP_SECRET = "mi/db/hcp_app"  # the same name hcpagents.db reads
 TENANTS = ("quillon", "marlowe")
 MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5")  # the two allowed models (ADR 0007)
 LEDGER_RETENTION_YEARS = 7
@@ -129,7 +131,7 @@ class Platform(cdk.Stack):
             storage_encrypted=True, iam_authentication=True, deletion_protection=True, backup=rds.BackupProps(retention=cdk.Duration.days(14)),
             cloudwatch_logs_exports=["postgresql"], removal_policy=cdk.RemovalPolicy.RETAIN)
         db.add_rotation_single_user(automatically_after=cdk.Duration.days(30))
-        suppress(db, "AwsSolutions-RDS6", "The app role signs in with a password held in Secrets Manager (DATABASE_URL); IAM authentication is enabled for operators.")
+        suppress(db, "AwsSolutions-RDS6", "The app role signs in with a password held in Secrets Manager (mi/db/hcp_app); IAM authentication is enabled for operators.")
         suppress(db, "AwsSolutions-SMG4", "Rotation is added with add_rotation_single_user above.")
         return db
 
@@ -181,10 +183,15 @@ class Platform(cdk.Stack):
         anthropic = secrets.Secret(self, "AnthropicKey", description="Filled in by hand after deploy; never in the template")
         suppress(anthropic, "AwsSolutions-SMG4", "A third-party API key cannot be rotated by AWS; rotation is a manual runbook step.")
         role = self.task_role()
-        db_url = secrets.Secret(self, "DatabaseUrl", description="The hcp_app role URL; filled in by hand after the migration job creates the role")
-        suppress(db_url, "AwsSolutions-SMG4", "The URL is rotated by changing the hcp_app password and this value together, a runbook step.")
+        self.app_secret = secrets.Secret(
+            self, "AppRoleSecret", secret_name=APP_SECRET, description="The hcp_app role: host, port, database and a generated password; the app reads it at boot",
+            generate_secret_string=secrets.SecretStringGenerator(
+                secret_string_template=json.dumps({"username": "hcp_app", "host": self.database.cluster_endpoint.hostname, "port": 5432, "dbname": "hcp"}),
+                generate_string_key="password", exclude_punctuation=True, password_length=32))
+        suppress(self.app_secret, "AwsSolutions-SMG4", "The password is rotated by deploying a new generated value; the migration task applies it to the role on every deploy.")
+        self.app_secret.grant_read(role)
         env = {"MI_VALKEY": f"valkeys://{self.cache.attr_endpoint_address}:6379/0", "MI_TEMPORAL": self.node.try_get_context("temporal") or "temporal.internal:7233"}
-        keys = {"ANTHROPIC_API_KEY": ecs.Secret.from_secrets_manager(anthropic), "DATABASE_URL": ecs.Secret.from_secrets_manager(db_url)}
+        keys = {"ANTHROPIC_API_KEY": ecs.Secret.from_secrets_manager(anthropic)}
         image = ecs.ContainerImage.from_asset(str(ROOT))
         migrated = self.migration(cluster, image)
         api = patterns.ApplicationLoadBalancedFargateService(
@@ -220,6 +227,7 @@ class Platform(cdk.Stack):
             logging=ecs.LogDrivers.aws_logs(stream_prefix="migrate", log_retention=logs.RetentionDays.ONE_YEAR))
         suppress(task.execution_role, "AwsSolutions-IAM5[Resource::*]", "ECR GetAuthorizationToken has no resource-level form.")
         self.database.connections.allow_default_port_from(self.app_sg)
+        self.app_secret.grant_read(task.task_role)  # the migration sets the hcp_app password from this secret
         code = lambda_.Code.from_inline((ROOT / "deploy" / "migrate_handler.py").read_text())
         handlers = {name: lambda_.Function(self, f"Migration-{name}", runtime=lambda_.Runtime.PYTHON_3_13, handler=f"index.{name}", code=code,
                                            timeout=cdk.Duration.minutes(1),

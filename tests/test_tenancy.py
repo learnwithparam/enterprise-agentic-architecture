@@ -64,7 +64,7 @@ def test_writing_a_row_for_another_tenant_is_refused():
 
 
 def test_with_no_tenant_set_nothing_is_visible():
-    with psycopg.connect(db.APP_URL) as conn:
+    with psycopg.connect(db.APP_URL) as conn:  # the URL is read from Secrets Manager
         assert conn.execute("SELECT count(*) FROM docs").fetchone()[0] == 0
 
 

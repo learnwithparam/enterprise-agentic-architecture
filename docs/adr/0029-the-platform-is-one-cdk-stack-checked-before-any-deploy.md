@@ -34,8 +34,13 @@ needs credentials that must not sit here.
 - **A second region keeps the ledger.** `SecondRegion` holds one locked, encrypted bucket per tenant in
   `eu-west-1`; each ledger bucket replicates into it. S3 names are global, so the copy carries its region in
   its name (`replica_bucket`). Replication keeps the retention rule, and the test asserts both buckets lock.
-- **Synth only.** Nothing deploys from this repo. The two secrets (the Anthropic key and the
-  `hcp_app` database URL) are created empty and filled in by hand.
+- **The app role's password is a secret.** `mi/db/hcp_app` holds the role's host, port and a generated
+  password. The app reads it at boot and the migration sets it on the role, so there is no password in a file
+  or an environment variable (`tests/test_env.py`). The stack creates the same name on AWS.
+- **The console's policy comes from the API.** The console is a static export, so `next.config` headers never
+  apply; the API sends `Content-Security-Policy` with each page, allowing this origin and the page's own inline
+  bootstrap scripts by hash. `web/scripts/check-csp.mjs` loads every route and fails on a violation.
+- **Synth only.** Nothing deploys from this repo. The Anthropic key secret is created empty and filled in by hand.
 
 ## Consequences
 

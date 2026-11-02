@@ -58,3 +58,26 @@ def test_a_real_deployment_lists_nobody_on_the_sign_in_screen(monkeypatch):
     assert api.login_options()["people"], "the local emulator lists the demo personas"
     monkeypatch.setattr(api.aws, "ENDPOINT", "")
     assert api.login_options() == {"tenants": [], "people": []}
+
+
+def test_csp_allows_only_this_origin_and_the_pages_own_inline_scripts(tmp_path):
+    from hcpagents import api
+    page = tmp_path / "index.html"
+    page.write_text('<script src="/a.js"></script><script>self.x=1</script><script> </script>')
+    policy = api.content_security_policy(page)
+    assert "script-src 'self' 'sha256-" in policy and policy.count("'sha256-") == 1
+    assert "default-src 'self'" in policy and "frame-ancestors 'none'" in policy and "object-src 'none'" in policy
+    assert "unsafe-eval" not in policy and "script-src 'self' 'unsafe-inline'" not in policy
+    page.write_text('<script>self.x=2</script>')
+    assert api.content_security_policy(page) != policy  # a changed page gets its own hash
+
+
+def test_page_route_sends_the_policy(monkeypatch, tmp_path):
+    """The route that serves the static console attaches the policy to every HTML page (the browser check covers the real build)."""
+    from fastapi.testclient import TestClient
+
+    from hcpagents import api
+    (tmp_path / "index.html").write_text("<script>self.x=1</script>")
+    monkeypatch.setattr(api, "DIST", tmp_path)
+    r = TestClient(api.app).get("/")
+    assert r.headers["content-security-policy"].startswith("default-src 'self'")

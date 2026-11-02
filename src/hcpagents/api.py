@@ -3,10 +3,15 @@
 uv run uvicorn hcpagents.api:app --port 8765
 """
 
+import base64
 import contextlib
+import hashlib
 import json
 import os
+import re
 from datetime import datetime
+from functools import cache
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -419,17 +424,33 @@ def refresh_proposals(u: dict = Depends(current_user)):
 app.include_router(v1.router)
 app.mount("/mcp", mcp_server.mount)
 
+@cache
+def _inline_script_hashes(f: Path, mtime: float) -> tuple[str, ...]:
+    html = f.read_text()
+    bodies = re.findall(r"<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", html, re.S)
+    return tuple(f"'sha256-{base64.b64encode(hashlib.sha256(b.encode()).digest()).decode()}'" for b in bodies if b.strip())
+
+
+def content_security_policy(f: Path) -> str:
+    """The console is a static export, so the policy is set here. Scripts run from this origin, plus the page's own
+    inline bootstrap scripts by hash: nothing else, so an injected script tag does not run. Styles allow inline
+    because React writes style attributes."""
+    scripts = " ".join(("'self'", *_inline_script_hashes(f, f.stat().st_mtime)))
+    return (f"default-src 'self'; script-src {scripts}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+            "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+
+
 if DIST.exists():
     app.mount("/_next", StaticFiles(directory=DIST / "_next"), name="next") if (DIST / "_next").exists() else None
     app.mount("/fonts", StaticFiles(directory=DIST / "fonts"), name="fonts") if (DIST / "fonts").exists() else None
 
-    # HEAD too: the console's links prefetch their pages with it
-    @app.api_route("/{page:path}", methods=["GET", "HEAD"])
-    def page(page: str):
-        f = DIST / page / "index.html" if not page.endswith(".html") else DIST / page
-        if not f.exists():
-            f = DIST / f"{page}.html" if (DIST / f"{page}.html").exists() else DIST / "index.html"
-        if not f.resolve().is_relative_to(DIST.resolve()):
-            raise HTTPException(404)
-        return FileResponse(f)
 
+# HEAD too: the console's links prefetch their pages with it. Registered last so every API route wins.
+@app.api_route("/{page:path}", methods=["GET", "HEAD"])
+def page(page: str):
+    f = DIST / page / "index.html" if not page.endswith(".html") else DIST / page
+    if not f.exists():
+        f = DIST / f"{page}.html" if (DIST / f"{page}.html").exists() else DIST / "index.html"
+    if not f.resolve().is_relative_to(DIST.resolve()) or not f.exists():
+        raise HTTPException(404)
+    return FileResponse(f, headers={"Content-Security-Policy": content_security_policy(f)} if f.suffix == ".html" else None)

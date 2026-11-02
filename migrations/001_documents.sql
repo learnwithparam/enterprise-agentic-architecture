@@ -32,7 +32,7 @@ CREATE POLICY tenant_isolation ON tenants
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hcp_app') THEN
-        CREATE ROLE hcp_app LOGIN PASSWORD 'hcp_app' NOSUPERUSER NOBYPASSRLS;
+        CREATE ROLE hcp_app LOGIN NOSUPERUSER NOBYPASSRLS;
     END IF;
 END $$;
 GRANT SELECT ON tenants TO hcp_app;

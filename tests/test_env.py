@@ -36,3 +36,23 @@ def test_owner_url_is_built_from_the_cluster_secret_parts(monkeypatch):
     assert db.owner_url(parts) == "postgresql://admin:p%40ss%2Fword@db.internal:5432/hcp"
     assert db.owner_url({**parts, "DATABASE_OWNER_URL": "postgresql://x"}) == "postgresql://x"
     assert db.owner_url({}).startswith("postgresql://hcp_owner:")
+
+
+def test_db_password_from_secrets_manager(monkeypatch):
+    """The app role's password lives in Secrets Manager only: no environment variable or file carries it."""
+    import json
+
+    import psycopg
+
+    from hcpagents import db
+    from hcpagents.aws import client
+    parts = json.loads(client("secretsmanager").get_secret_value(SecretId=db.APP_SECRET)["SecretString"])
+    assert parts["password"] not in ("hcp_app", "") and len(parts["password"]) >= 24
+    monkeypatch.setenv("DATABASE_URL", "postgresql://hcp_app:hcp_app@localhost:5433/hcp")  # no fallback reads this
+    assert db.APP_URL == db.app_url(parts)
+    with psycopg.connect(db.APP_URL) as conn:  # the role accepts exactly this password
+        assert conn.execute("SELECT current_user").fetchone()[0] == "hcp_app"
+    with __import__("pytest").raises(psycopg.OperationalError):
+        psycopg.connect(db.app_url(parts | {"password": "hcp_app"}), connect_timeout=2)
+    assert "hcp_app'" not in (db.MIGRATIONS / "001_documents.sql").read_text().split("CREATE ROLE")[1].split(";")[0]
+    assert db.app_url({"username": "u", "password": "p@/", "host": "h", "port": 1, "dbname": "d"}) == "postgresql://u:p%40%2F@h:1/d"

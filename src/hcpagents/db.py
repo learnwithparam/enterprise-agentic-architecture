@@ -6,16 +6,53 @@ to the next one on the same connection. With no tenant set, every query returns 
 Migrations run as the owner, the only place that role is used.
 """
 
+import json
 import os
+import secrets
 from contextlib import contextmanager
+from functools import cache
 from urllib.parse import quote
 
 import psycopg
+from botocore.exceptions import ClientError
+from psycopg import sql
 from psycopg.rows import dict_row
 
 from hcpagents import world
+from hcpagents.aws import client
 
-APP_URL = os.environ.get("DATABASE_URL", "postgresql://hcp_app:hcp_app@localhost:5433/hcp")
+APP_SECRET = "mi/db/hcp_app"  # Secrets Manager: {username, password, host, port, dbname}; the stack creates the same name
+
+
+def app_url(parts: dict) -> str:
+    """The app role's URL from its secret."""
+    q = lambda k: quote(str(parts[k]), safe="")
+    return f"postgresql://{q('username')}:{q('password')}@{parts['host']}:{parts['port']}/{parts['dbname']}"
+
+
+def app_secret(create: bool = False) -> dict:
+    """Reads the app role's secret. With create=True a missing one is made with a random password (the local
+    emulator; the CDK stack creates it on AWS). There is no environment fallback for the password."""
+    sm = client("secretsmanager")
+    try:
+        return json.loads(sm.get_secret_value(SecretId=APP_SECRET)["SecretString"])
+    except ClientError as e:
+        if not create or e.response["Error"]["Code"] != "ResourceNotFoundException":
+            raise
+    parts = {"username": "hcp_app", "password": secrets.token_urlsafe(24), "host": "localhost", "port": 5433, "dbname": "hcp"}
+    sm.create_secret(Name=APP_SECRET, SecretString=json.dumps(parts))
+    return parts
+
+
+@cache
+def _app_url() -> str:
+    return app_url(app_secret())
+
+
+def __getattr__(name):  # db.APP_URL is read from Secrets Manager on first use
+    if name == "APP_URL":
+        return _app_url()
+    raise AttributeError(name)
 
 
 def owner_url(env=os.environ) -> str:
@@ -37,16 +74,16 @@ DEFAULT_TENANT, current_tenant, as_tenant = world.DEFAULT_TENANT, world.current_
 @contextmanager
 def session():
     """One transaction as the current tenant."""
-    with psycopg.connect(APP_URL, row_factory=dict_row) as conn, conn.transaction():
+    with psycopg.connect(_app_url(), row_factory=dict_row) as conn, conn.transaction():
         conn.execute("SELECT set_config('app.tenant_id', %s, true)", (current_tenant(),))
         yield conn
 
 
 def up() -> bool:
     try:
-        with psycopg.connect(APP_URL, connect_timeout=2):
+        with psycopg.connect(_app_url(), connect_timeout=2):
             return True
-    except psycopg.Error:
+    except (psycopg.Error, ClientError):
         return False
 
 
@@ -63,6 +100,8 @@ def migrate() -> list[str]:
                 conn.execute(f.read_text())
                 conn.execute("INSERT INTO schema_migrations (name) VALUES (%s)", (f.name,))
             ran.append(f.name)
+        conn.execute(sql.SQL("ALTER ROLE hcp_app PASSWORD {}").format(sql.Literal(app_secret(create=True)["password"])))
+        _app_url.cache_clear()
         for t in world.tenants():
             # The owner is forced through RLS too, so it names the tenant it is writing.
             with conn.transaction():
