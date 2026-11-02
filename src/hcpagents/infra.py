@@ -4,6 +4,7 @@
     uv run python -m hcpagents.infra --reset  wipe state and reseed; the locked archive stays
 """
 
+import contextlib
 import hashlib
 import json
 import sys
@@ -129,6 +130,7 @@ def users():
         pool = idp.create_user_pool(PoolName=POOL, Schema=[
             {"Name": "role", "AttributeDataType": "String", "Mutable": True},
             {"Name": "country", "AttributeDataType": "String", "Mutable": True},
+            {"Name": "tenant", "AttributeDataType": "String", "Mutable": True},
         ])["UserPool"]["Id"]
         ssm.put_parameter(Name="/mi/cognito/pool", Value=pool, Type="String", Overwrite=True)
     try:
@@ -137,9 +139,21 @@ def users():
         client_id = idp.create_user_pool_client(UserPoolId=pool, ClientName="mi-console", GenerateSecret=False,
             ExplicitAuthFlows=["ALLOW_ADMIN_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"])["UserPoolClient"]["ClientId"]
         ssm.put_parameter(Name="/mi/cognito/client", Value=client_id, Type="String", Overwrite=True)
+    try:
+        client_id_cli = ssm.get_parameter(Name="/mi/cognito/cli-client")["Parameter"]["Value"]
+    except ClientError:
+        client_id_cli = idp.create_user_pool_client(
+            UserPoolId=pool, ClientName="mi-cli", GenerateSecret=False, ExplicitAuthFlows=["ALLOW_REFRESH_TOKEN_AUTH"],
+            AllowedOAuthFlows=["code"], AllowedOAuthFlowsUserPoolClient=True, AllowedOAuthScopes=["openid"],
+            CallbackURLs=[auth.CLI_REDIRECT], SupportedIdentityProviders=["COGNITO"])["UserPoolClient"]["ClientId"]
+        ssm.put_parameter(Name="/mi/cognito/cli-client", Value=client_id_cli, Type="String", Overwrite=True)
+    with contextlib.suppress(ClientError):  # a pool made before the tenant claim existed gets the attribute once
+        idp.add_custom_attributes(UserPoolId=pool, CustomAttributes=[{"Name": "tenant", "AttributeDataType": "String", "Mutable": True}])
     for u in world.directory():
         if not _exists(lambda: idp.admin_get_user(UserPoolId=pool, Username=u["id"])):
             _create_user(idp, pool, u)
+        idp.admin_update_user_attributes(UserPoolId=pool, Username=u["id"], UserAttributes=[
+            {"Name": "custom:tenant", "Value": u.get("tenant", world.DEFAULT_TENANT)}])
         idp.admin_set_user_password(UserPoolId=pool, Username=u["id"], Password=auth.DEMO_PASSWORD, Permanent=True)
 
 
@@ -148,6 +162,7 @@ def _create_user(idp, pool: str, u: dict):
         {"Name": "name", "Value": u["name"]},
         {"Name": "custom:role", "Value": u["role"]},
         {"Name": "custom:country", "Value": u["country"]},
+        {"Name": "custom:tenant", "Value": u.get("tenant", world.DEFAULT_TENANT)},
     ])
 
 

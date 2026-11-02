@@ -17,8 +17,16 @@ from hcpagents.aws import ENDPOINT, REGION, client
 DEMO_PASSWORD = os.environ.get("MI_DEMO_PASSWORD", "local-demo-only")  # synthetic users on the local emulator
 
 
+CLI_REDIRECT = os.environ.get("HCP_REDIRECT", "http://127.0.0.1:8976/callback")  # where the hcp CLI listens for the sign-in code
+LEEWAY = 0  # seconds of clock slack on expiry; tests make it negative to meet a real token after its expiry
+
+
 class Unauthenticated(Exception):
     pass
+
+
+class WrongTenant(Exception):
+    """The token is genuine but names a different tenant than our directory does."""
 
 
 @cache
@@ -29,6 +37,11 @@ def pool() -> str:
 @cache
 def client_id() -> str:
     return client("ssm").get_parameter(Name="/mi/cognito/client")["Parameter"]["Value"]
+
+
+@cache
+def cli_client_id() -> str:
+    return client("ssm").get_parameter(Name="/mi/cognito/cli-client")["Parameter"]["Value"]
 
 
 def issuer() -> str:
@@ -56,8 +69,8 @@ def verify(token: str) -> dict:
     """The signed-in user, or Unauthenticated. Checks signature, issuer, audience, expiry and token type."""
     try:
         key = _keys().get_signing_key_from_jwt(token).key
-        claims = jwt.decode(token, key, algorithms=["RS256"], issuer=issuer(), audience=client_id(),
-                            options={"require": ["exp", "iss", "aud", "sub"]})
+        claims = jwt.decode(token, key, algorithms=["RS256"], issuer=issuer(), audience=[client_id(), cli_client_id()],
+                            leeway=LEEWAY, options={"require": ["exp", "iss", "aud", "sub"]})
     except Exception as e:
         raise Unauthenticated("Sign in again") from e
     if claims.get("token_use") != "id":
@@ -66,8 +79,11 @@ def verify(token: str) -> dict:
     person = world.person(uid)
     if person is None:
         raise Unauthenticated("Unknown user")
+    tenant = person.get("tenant", db.DEFAULT_TENANT)
+    if claims.get("custom:tenant") != tenant:
+        raise WrongTenant(f"The token names tenant {claims.get('custom:tenant')!r}, not {tenant!r}")
     return {"id": uid, "name": claims["name"], "role": claims["custom:role"], "country": claims["custom:country"],
-            "title": person["title"], "tenant": person.get("tenant", db.DEFAULT_TENANT)}
+            "title": person["title"], "tenant": tenant}
 
 
 def reauthenticate(user: dict, password: str) -> dict:

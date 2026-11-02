@@ -63,7 +63,10 @@ async def verified_token_on_every_api_call(request: Request, call_next):
                 raise auth.Unauthenticated("Send the ID token as Authorization: Bearer")
             request.state.user = auth.verify(token)
         except auth.Unauthenticated as e:
-            return JSONResponse({"detail": str(e)}, status_code=401)
+            challenge = f'Bearer resource_metadata="{request.base_url}.well-known/oauth-protected-resource"'
+            return JSONResponse({"detail": str(e)}, status_code=401, headers={"WWW-Authenticate": challenge})
+        except auth.WrongTenant as e:
+            return JSONResponse({"detail": str(e)}, status_code=403)
         if path.startswith(MACHINE) and (wait := ratelimit.hit(request.state.user["tenant"], request.state.user["id"])):
             return JSONResponse({"detail": "Rate limit reached"}, status_code=429, headers={"Retry-After": str(wait)})
         with db.as_tenant(request.state.user["tenant"]):
@@ -107,9 +110,16 @@ def login_options():
     """
     if not aws.ENDPOINT:
         return {"tenants": [], "people": []}
-    return {"tenants": world.tenants(),
+    return {"cli_client_id": auth.cli_client_id(), "tenants": world.tenants(),
             "people": [{k: u.get(k) for k in ("id", "name", "role", "country", "title")} | {"tenant": u.get("tenant", world.DEFAULT_TENANT)}
                        for u in world.directory()]}
+
+
+@app.get("/.well-known/oauth-protected-resource")
+def protected_resource(request: Request):
+    """RFC 9728: which issuer signs the tokens this API accepts, so an MCP client or the CLI finds the sign-in on its own."""
+    return {"resource": f"{request.base_url}mcp", "authorization_servers": [auth.issuer()],
+            "bearer_methods_supported": ["header"], "scopes_supported": ["openid"]}
 
 
 @app.get("/api/health")

@@ -26,7 +26,10 @@ interface is another way to skip authentication, tenancy or a limit if it brings
 
 - A new interface is one more prefix in `PROTECTED`. A structural test walks every `/api` and `/v1`
   route without a token, and a mutant drops `/v1` from the list.
-- The sign-in is a password exchange against the identity provider, not an OAuth device flow. The MCP
-  server accepts the same bearer token and does not host an OAuth authorization server.
+- The `hcp` CLI signs in with the OAuth authorization code flow and PKCE against a loopback redirect, so the
+  person types their password into the identity provider's page and the CLI never sees it. Cognito has no
+  device-code grant, here or on AWS. `/.well-known/oauth-protected-resource` (RFC 9728) names the issuer, and
+  a 401 points at it. The console and the approver's re-sign-in (ADR 0017) still use the server-side password
+  exchange. The MCP server accepts the same bearer token and does not host an authorization server.
 - MCP in stateless mode keeps no session, so no server-initiated messages. The tools are request and reply.
 - Each app lifespan builds its own MCP server, because the SDK runs a session manager once.

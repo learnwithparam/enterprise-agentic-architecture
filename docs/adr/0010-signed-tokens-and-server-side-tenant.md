@@ -14,7 +14,8 @@ a request to a client company. Row-level security (ADR 0009) is only as strong a
 - `auth.verify` checks the RS256 signature against the issuer's published keys, then issuer, audience (our
   app client), expiry and `token_use=id`. Any failure is a 401 and nothing runs.
 - The tenant is read from our own directory (`world/people.toml`), never from a header or a claim the
-  caller can shape. The middleware opens `db.as_tenant(...)` before the route runs, so every query is
+  caller can shape. The token also carries `custom:tenant`; it must equal the directory's, or the call is a
+  403 and nothing runs. The middleware opens `db.as_tenant(...)` before the route runs, so every query is
   scoped to it.
 - The library is PyJWT 2.15.1 with `cryptography` for RS256, released 28 September 2026, widely used and
   maintained. Keys are fetched once and cached by the client.
