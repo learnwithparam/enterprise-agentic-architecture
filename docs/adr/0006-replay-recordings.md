@@ -28,5 +28,5 @@ change cannot ship until someone records it and the gate passes on the new recor
 
 ## Enforced by
 
-`tests/test_model_policy.py::test_every_recording_used_only_haiku_5_5` and the eval gate, which runs
+`tests/test_model_policy.py::test_every_recording_used_only_allowed_models` and the eval gate, which runs
 every recording.

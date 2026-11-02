@@ -279,6 +279,6 @@ else changes."
 "Also safe" chip on inq-108, which went to pharmacovigilance instead of a specialist.
 
 **Say:** "A prompt, model or content change ships only if every line holds. One missed adverse event, one
-ungrounded sentence or one call to a model other than Haiku 5.5 fails the gate."
+ungrounded sentence or one call to a model off the allowlist, Haiku 5.5 or Sonnet 5.5, fails the gate."
 
 ![Release gate](./product-walkthrough-shots/release-gate-desktop.webp)

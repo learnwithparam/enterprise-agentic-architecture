@@ -20,7 +20,7 @@ make lab N=bound-agent-plans-with-a-policy-kernel
 
 - `src/hcpagents/kernel.py`: `check_step`, `check_facts`, `check_attempt`, `check_route`, `escalation`.
 - `src/hcpagents/graph.py`: the table the kernel derives its order and facts from.
-- `docs/adr/0013-a-policy-kernel-bounds-every-plan.md` and `docs/adr/0014-langgraph-inside-one-kernel-step.md`.
+- `docs/adr/0013-a-policy-kernel-bounds-every-plan.md` and `docs/adr/0014-langgraph-plans-inside-one-kernel-step.md`.
 
 ## What the test proves
 

@@ -2,7 +2,8 @@
 
 **The job:** an engineer changes the triage prompt to handle Japanese better. Before that change reaches a
 doctor, the team must know it still sends every adverse event to pharmacovigilance, never sends a reply a
-human should have reviewed, and never calls a model other than Haiku 5.5.
+human should have reviewed, and never calls a model outside the allowlist in `evals/gate.toml`: Haiku 5.5
+by default, Sonnet 5.5 where the router allows it.
 
 **Before:** someone tries a few questions in a playground and says it looks fine.
 
@@ -30,7 +31,7 @@ make up && make evals                 # the real gate over every inquiry, in rep
 - A run where every case lands on its expected route passes.
 - One adverse event routed to a reviewer instead of pharmacovigilance fails the release on recall.
 - A more cautious route listed as also safe passes; sending what a human should review fails.
-- One call on another model fails the release.
+- One call on a model outside the allowlist fails the release.
 
 ## Break it, watch the test fail
 

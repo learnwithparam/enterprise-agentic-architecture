@@ -30,17 +30,18 @@ on [Floci](https://floci.io/). The same boto3 code runs against AWS.
 
 ## Run it
 
-Needs Docker, [uv](https://docs.astral.sh/uv/) and Node 22.
+Needs Docker, [uv](https://docs.astral.sh/uv/) and Node 22. The first run downloads the local embedding model
+(about 220 MB). What Floci covers, and what it does not, is in [docs/floci-support.md](docs/floci-support.md).
 
 ```bash
-make up       # Postgres with pgvector, and Floci (local AWS) with every resource: DynamoDB, S3, SQS, EventBridge,
-              # Step Functions, Cognito, Verified Permissions, SSM, CloudWatch Logs
+make up       # Postgres with pgvector, and Floci (local AWS) with every resource: DynamoDB, S3, KMS, SQS,
+              # EventBridge, Step Functions, Cognito, Verified Permissions, SSM, CloudWatch Logs
 make serve    # the console on http://localhost:8765
 make check    # the gate: tests, labs, evals, mutants, prose, web build, diagrams
 ```
 
-Model calls replay from `recordings/` by default, so all of the above is free and needs no API key.
-For live calls copy `.env.example` to a file named `.env` (git ignores it) and set `ANTHROPIC_API_KEY`,
+Replay needs no key: model calls replay from `recordings/` by default, so all of the above is free.
+`make record` and `make serve LIVE=1` need `ANTHROPIC_API_KEY`. For live calls copy `.env.example` to a file named `.env` (git ignores it) and set `ANTHROPIC_API_KEY`,
 then run `make serve LIVE=1`. The repo reads that file into its own process only; nothing sources it.
 `make record` calls Haiku 5.5 for every inquiry, about two cents in total, under the spend cap in
 `policies/autonomy.toml`.

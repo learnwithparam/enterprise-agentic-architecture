@@ -73,3 +73,34 @@ def test_the_validation_pack_names_tests_and_mutants_that_exist():
         if mutant not in mutants:
             problems.append(f"{req}: no mutant {mutant!r}")
     assert not problems, "\n".join(problems)
+
+
+_PATH_ROOTS = ("docs/", "src/", "tests/", "labs/", "scripts/", "policies/", "evals/", "migrations/", "deploy/", "world/")
+_PATH_EXT = (".py", ".md", ".toml", ".sql", ".cedar", ".json", ".yaml", ".yml")
+
+
+def _prose_files() -> list[Path]:
+    return [ROOT / "README.md", *sorted(DOCS.glob("*.md")), *sorted(DOCS.glob("adr/*.md")), *sorted(ROOT.glob("labs/*/README.md"))]
+
+
+def test_md_links_resolve():
+    """Every relative link and every backticked repo path in the docs and lab READMEs names a file that exists."""
+    problems = []
+    for md in _prose_files():
+        text = md.read_text()
+        for target in re.findall(r"\]\(([^)\s]+)\)", text):
+            if target.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            if not (md.parent / target.split("#")[0]).exists():
+                problems.append(f"{md.relative_to(ROOT)}: link {target}")
+        for ref in re.findall(r"`([^`\s]+)`", text):
+            file, _, name = ref.partition("::")
+            if not file.startswith(_PATH_ROOTS) or not file.endswith(_PATH_EXT) or any(c in file for c in "*<>{}"):
+                continue
+            if name and file.startswith("tests/"):
+                ok = _test_exists(ref)
+            else:
+                ok = (ROOT / file).exists()
+            if not ok:
+                problems.append(f"{md.relative_to(ROOT)}: path {ref}")
+    assert not problems, "\n".join(sorted(set(problems)))

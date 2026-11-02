@@ -558,7 +558,7 @@ flowchart LR
 | `grounding.py` | Composing and verifying replies | `tests/test_grounding.py` |
 | `cases.py`, `workflows.py`, `activities.py`, `durable.py`, `worker.py` | A case and its durable life | `tests/test_flow.py` |
 | `ledger.py`, `privacy.py` | The chain, the archive, erasure | `tests/test_flow.py` |
-| `auth.py`, `authz.py`, `db.py`, `store.py` | Identity, permissions, tenancy, storage | `tests/test_auth.py` |
+| `auth.py`, `authz.py`, `db.py`, `store.py` | Identity, permissions, tenancy, storage | `tests/test_interfaces.py` |
 | `gateway.py`, `releases.py`, `evals.py` | Metering, releases, the gate | `tests/test_gateway.py` |
 | `ingest.py`, `identity.py`, `hcp360.py` | Channels, identity, the shared memory | `tests/test_ingest.py` |
 | `sentinel.py`, `outreach.py`, `supervisor.py`, `insight.py` | Perception and coordination | `tests/test_perception.py` |
