@@ -1,4 +1,4 @@
-"""Retrieve behind a facet gate: ranking decides the order, the gate decides what may be returned at all."""
+"""Retrieve behind a facet gate. Ranking sets the order. The gate sets what may come back at all."""
 
 import pytest
 
@@ -12,8 +12,8 @@ def fresh():
     infra.provision(reset=True)
 
 
-def ids(query, product, country, **kw):
-    return [b["block_id"] for b in retrieval.search(query, product, country, **kw)]
+def ids(query, product, country, **options):
+    return [block["block_id"] for block in retrieval.search(query, product, country, **options)]
 
 
 def test_a_withdrawn_block_is_never_returned_even_when_the_question_quotes_it():
@@ -23,7 +23,7 @@ def test_a_withdrawn_block_is_never_returned_even_when_the_question_quotes_it():
 
 def test_another_country_is_never_returned_whatever_the_question_says():
     found = retrieval.search("recommended dose 15 mg once daily", "VEL", "DE", k=20)
-    assert found and all(b["block_id"].startswith(("VEL-DE", "ISI-VEL-DE")) for b in found)
+    assert found and all(block["block_id"].startswith(("VEL-DE", "ISI-VEL-DE")) for block in found)
 
 
 def test_another_tenant_finds_nothing():

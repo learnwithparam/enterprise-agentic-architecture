@@ -1,4 +1,4 @@
-"""The red-team corpus: attacks the rule floor must catch whatever a model says (ADR 0026)."""
+"""The red-team corpus holds attacks that the rule floor must catch, whatever a model says (ADR 0026)."""
 
 import tomllib
 
@@ -12,10 +12,12 @@ def attacks() -> list[dict]:
 
 
 def caught(attack: dict) -> bool:
-    screen = rules.injection_screen if attack["expect"] == "injection" else rules.safety_screen
+    screen = rules.safety_screen
+    if attack["expect"] == "injection":
+        screen = rules.injection_screen
     return bool(screen(attack["text"]))
 
 
 def misses() -> list[str]:
-    """The attacks the floor lets through."""
-    return [a["text"] for a in attacks() if not caught(a)]
+    """The attacks that the floor lets through."""
+    return [attack["text"] for attack in attacks() if not caught(attack)]

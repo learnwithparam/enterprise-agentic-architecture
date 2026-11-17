@@ -1,5 +1,7 @@
-"""Every permission decision goes to Amazon Verified Permissions, evaluated by Cedar policies in
-policies/cedar. The app holds no role checks of its own."""
+"""Each permission check goes to AWS. It runs our Cedar rules.
+
+The Cedar policy files decide. The app has no role checks of its own.
+"""
 
 from functools import cache
 
@@ -14,23 +16,25 @@ def _store() -> str:
 
 @cache
 def _policy_file(policy_id: str) -> str:
-    p = client("verifiedpermissions").get_policy(policyStoreId=_store(), policyId=policy_id)
-    return p["definition"]["static"].get("description") or policy_id
+    policy = client("verifiedpermissions").get_policy(policyStoreId=_store(), policyId=policy_id)
+    return policy["definition"]["static"].get("description") or policy_id
 
 
-def _attrs(d: dict) -> dict:
-    return {k: {"string": str(v)} for k, v in d.items() if v is not None}
+def _attrs(values: dict) -> dict:
+    return {key: {"string": str(value)} for key, value in values.items() if value is not None}
 
 
 def allowed(principal_type: str, principal_id: str, principal_attrs: dict, action: str,
             resource_type: str, resource_id: str, resource_attrs: dict, context: dict | None = None,
             principal_tenant: str | None = None) -> tuple[bool, str]:
-    """Ask Verified Permissions. Both sides carry a tenant so tenants.cedar can refuse any crossing:
-    the resource belongs to the tenant being served, the principal to the one it signed in under."""
+    """Ask Verified Permissions. Both sides carry a tenant. This lets tenants.cedar refuse any mix up.
+
+    The resource has the tenant we serve. The principal has the tenant it signed in under.
+    """
     served = world.current_tenant()
     principal_attrs = principal_attrs | {"tenant": principal_tenant or served}
     resource_attrs = resource_attrs | {"tenant": served}
-    req = {
+    request = {
         "policyStoreId": _store(),
         "principal": {"entityType": principal_type, "entityId": principal_id},
         "action": {"actionType": "Action", "actionId": action},
@@ -41,11 +45,14 @@ def allowed(principal_type: str, principal_id: str, principal_attrs: dict, actio
         ]},
     }
     if context:
-        req["context"] = {"contextMap": _attrs(context)}
-    res = client("verifiedpermissions").is_authorized(**req)
-    ok = res["decision"] == "ALLOW"
-    policies = sorted({_policy_file(p["policyId"]) for p in res.get("determiningPolicies", [])})
-    return ok, f"Verified Permissions: {res['decision']}" + (f" ({', '.join(policies)})" if policies else "")
+        request["context"] = {"contextMap": _attrs(context)}
+    result = client("verifiedpermissions").is_authorized(**request)
+    ok = result["decision"] == "ALLOW"
+    policies = sorted({_policy_file(found["policyId"]) for found in result.get("determiningPolicies", [])})
+    reason = f"Verified Permissions: {result['decision']}"
+    if policies:
+        reason += f" ({', '.join(policies)})"
+    return ok, reason
 
 
 def user_can(user: dict, action: str, resource_type: str, resource_id: str, resource_attrs: dict) -> tuple[bool, str]:

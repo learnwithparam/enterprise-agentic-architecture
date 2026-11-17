@@ -1,8 +1,7 @@
-"""The insight agent: what several doctors keep raising across channels, for internal teams only (ADR 0024).
+"""The insight agent shows what many doctors keep raising. It is for internal teams only (ADR 0024).
 
-A theme is a topic that at least MIN_HCPS different doctors raised. Every theme lists the interactions it
-came from, so a reader can check it, and a digest never contains a word of an interaction. Nothing here is
-ever sent to a doctor.
+A theme is a topic that at least MIN_HCPS different doctors raised. Each theme lists the interactions it came from,
+so a reader can check it. A digest never holds a word of an interaction. Nothing here is ever sent to a doctor.
 """
 
 import re
@@ -21,18 +20,21 @@ TOPIC_WORDS = {
 }
 
 
+def _biggest_first(theme: dict) -> tuple:
+    return -theme["hcps"], theme["topic"]
+
+
 def digest(since: datetime | None = None) -> list[dict]:
-    """Themes raised by at least MIN_HCPS doctors, biggest first: {topic, hcps, channels, interactions, sources},
-    optionally only from interactions received since a moment."""
+    """Themes that at least MIN_HCPS doctors raised, biggest first. Pass a time to see only newer interactions."""
     with db.session() as conn:
         rows = conn.execute("SELECT id, channel, body, hcp_id FROM interactions WHERE hcp_id IS NOT NULL "
                             "AND (%s::timestamptz IS NULL OR received_at >= %s) ORDER BY occurred_at DESC",
                             (since, since)).fetchall()
-    out = []
+    themes = []
     for topic, pattern in TOPIC_WORDS.items():
-        hits = [r for r in rows if re.search(pattern, r["body"], re.IGNORECASE)]
-        hcps = {r["hcp_id"] for r in hits}
+        hits = [row for row in rows if re.search(pattern, row["body"], re.IGNORECASE)]
+        hcps = {row["hcp_id"] for row in hits}
         if len(hcps) >= MIN_HCPS:
-            out.append({"topic": topic, "hcps": len(hcps), "channels": sorted({r["channel"] for r in hits}),
-                        "interactions": len(hits), "sources": [r["id"] for r in hits[:SAMPLE]]})
-    return sorted(out, key=lambda t: (-t["hcps"], t["topic"]))
+            themes.append({"topic": topic, "hcps": len(hcps), "channels": sorted({row["channel"] for row in hits}),
+                           "interactions": len(hits), "sources": [row["id"] for row in hits[:SAMPLE]]})
+    return sorted(themes, key=_biggest_first)

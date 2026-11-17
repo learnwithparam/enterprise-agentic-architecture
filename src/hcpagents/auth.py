@@ -1,8 +1,8 @@
 """Who is calling, proved by a signed token.
 
-The identity provider (Cognito, or any OIDC issuer) signs an ID token. We verify the signature against
-its published keys, then the issuer, the audience, the expiry and the token type. The tenant never comes
-from the caller: it comes from our own directory, so a token cannot name its way into another client.
+The identity provider signs an ID token. It can be Cognito or any OIDC issuer.
+We check the signature against its public keys. Then we check the issuer, the audience, the expiry and the token type.
+The tenant never comes from the caller. It comes from our own directory, so a token cannot name its way into another client.
 """
 
 import os
@@ -14,11 +14,11 @@ import jwt
 from hcpagents import db, world
 from hcpagents.aws import ENDPOINT, REGION, client
 
-DEMO_PASSWORD = os.environ.get("MI_DEMO_PASSWORD", "local-demo-only")  # synthetic users on the local emulator
+DEMO_PASSWORD = os.environ.get("MI_DEMO_PASSWORD", "local-demo-only")  # fake users on the local emulator
 
 
-CLI_REDIRECT = os.environ.get("HCP_REDIRECT", "http://127.0.0.1:8976/callback")  # where the hcp CLI listens for the sign-in code
-LEEWAY = 0  # seconds of clock slack on expiry; tests make it negative to meet a real token after its expiry
+CLI_REDIRECT = os.environ.get("HCP_REDIRECT", "http://127.0.0.1:8976/callback")  # where the hcp CLI waits for the sign-in code
+LEEWAY = 0  # seconds of slack for the clock. Tests make it negative to test a late token.
 
 
 class Unauthenticated(Exception):
@@ -26,7 +26,7 @@ class Unauthenticated(Exception):
 
 
 class WrongTenant(Exception):
-    """The token is genuine but names a different tenant than our directory does."""
+    """The token is real, but its tenant is not the one we have on file."""
 
 
 @cache
@@ -55,24 +55,24 @@ def _keys() -> jwt.PyJWKClient:
 
 
 def login(user_id: str, password: str) -> str:
-    """Exchange a password for an ID token. Only the sign-in route calls this."""
+    """Swap a password for an ID token. Only the sign-in route calls this."""
     try:
-        r = client("cognito-idp").admin_initiate_auth(
+        result = client("cognito-idp").admin_initiate_auth(
             UserPoolId=pool(), ClientId=client_id(), AuthFlow="ADMIN_USER_PASSWORD_AUTH",
             AuthParameters={"USERNAME": user_id, "PASSWORD": password})
-    except Exception as e:
-        raise Unauthenticated("Wrong user or password") from e
-    return r["AuthenticationResult"]["IdToken"]
+    except Exception as error:
+        raise Unauthenticated("Wrong user or password") from error
+    return result["AuthenticationResult"]["IdToken"]
 
 
 def verify(token: str) -> dict:
-    """The signed-in user, or Unauthenticated. Checks signature, issuer, audience, expiry and token type."""
+    """Return the signed-in user, or raise Unauthenticated. The token must be signed, fresh and meant for us."""
     try:
         key = _keys().get_signing_key_from_jwt(token).key
         claims = jwt.decode(token, key, algorithms=["RS256"], issuer=issuer(), audience=[client_id(), cli_client_id()],
                             leeway=LEEWAY, options={"require": ["exp", "iss", "aud", "sub"]})
-    except Exception as e:
-        raise Unauthenticated("Sign in again") from e
+    except Exception as error:
+        raise Unauthenticated("Sign in again") from error
     if claims.get("token_use") != "id":
         raise Unauthenticated("Not an ID token")
     uid = claims["cognito:username"]
@@ -87,11 +87,11 @@ def verify(token: str) -> dict:
 
 
 def reauthenticate(user: dict, password: str) -> dict:
-    """The approver signs in again at the moment of approving. The result is their electronic signature (ADR 0017)."""
+    """The approver signs in again when they approve. That sign-in is their electronic signature (ADR 0017)."""
     try:
         signed_in = verify(login(user["id"], password))
-    except Unauthenticated as e:
-        raise Unauthenticated("Signing needs your password again") from e
+    except Unauthenticated as error:
+        raise Unauthenticated("Signing needs your password again") from error
     if signed_in["id"] != user["id"]:
         raise Unauthenticated("Signing needs your own password")
     return {"user": user["id"], "name": user["name"], "at": datetime.now(UTC).isoformat(timespec="seconds"),

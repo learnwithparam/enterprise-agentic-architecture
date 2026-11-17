@@ -1,10 +1,12 @@
-"""The audit ledger: an append-only hash chain that Compliance can check without trusting us.
+"""The audit ledger: a hash chain that you can only add to. Compliance can check it without trusting us.
 
-Every entry carries the hash of the one before it. Each entry is also written to an S3 bucket
-under Object Lock in COMPLIANCE mode, which nobody can delete for ten years, and the chain head is
-signed with a KMS key at each checkpoint. Editing a row in DynamoDB breaks the chain at that row;
-deleting the archived copy is refused by S3. Each tenant has its own chain, and personal data in an entry
-is sealed under a per-person key (privacy.py), so erasing a person never touches the chain.
+Every entry holds the hash of the one before it. Each entry is also copied to an S3 bucket.
+The bucket uses Object Lock in COMPLIANCE mode, so nobody can delete a copy for ten years.
+At each checkpoint the head of the chain is signed with a KMS key.
+
+Editing a row in DynamoDB breaks the chain at that row. S3 refuses to delete the archived copy.
+Each tenant has its own chain. Personal data is sealed under a key for each person (privacy.py).
+So erasing a person never touches the chain.
 """
 
 import hashlib
@@ -48,88 +50,100 @@ def digest(prev: str, entry: dict) -> str:
     return hashlib.sha256((prev + json.dumps(entry, sort_keys=True, ensure_ascii=False)).encode()).hexdigest()
 
 
+def _row_from(item: dict) -> dict:
+    return {"seq": int(item["seq"]["N"]), "hash": item["hash"]["S"], "prev": item["prev"]["S"],
+            "entry": json.loads(item["entry"]["S"]), "signature": item.get("signature", {}).get("S")}
+
+
 def _rows() -> list[dict]:
     ddb = client("dynamodb")
-    rows, kw = [], {"TableName": TABLE, "KeyConditionExpression": "chain = :c",
-                    "ExpressionAttributeValues": {":c": {"S": _chain()}}, "ConsistentRead": True}
+    rows, query = [], {"TableName": TABLE, "KeyConditionExpression": "chain = :c",
+                       "ExpressionAttributeValues": {":c": {"S": _chain()}}, "ConsistentRead": True}
     while True:
-        page = ddb.query(**kw)
-        rows += [{"seq": int(i["seq"]["N"]), "hash": i["hash"]["S"], "prev": i["prev"]["S"],
-                  "entry": json.loads(i["entry"]["S"]), "signature": i.get("signature", {}).get("S")}
-                 for i in page["Items"]]
+        page = ddb.query(**query)
+        rows += [_row_from(item) for item in page["Items"]]
         if "LastEvaluatedKey" not in page:
             return rows
-        kw["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+        query["ExclusiveStartKey"] = page["LastEvaluatedKey"]
 
 
 def entries(case_id: str | None = None, reveal: bool = False) -> list[dict]:
-    """This tenant's rows. Sealed personal data stays sealed unless the caller is allowed to open it."""
-    rows = [r for r in _rows() if case_id is None or r["entry"].get("case") == case_id]
-    return [r | {"entry": privacy.reveal(r["entry"])} for r in rows] if reveal else rows
+    """This tenant's rows. Sealed data stays sealed unless the caller may open it."""
+    rows = [row for row in _rows() if case_id is None or row["entry"].get("case") == case_id]
+    if not reveal:
+        return rows
+    return [row | {"entry": privacy.reveal(row["entry"])} for row in rows]
+
+
+def _last_row(ddb, chain: str) -> tuple[int, str]:
+    last = ddb.query(TableName=TABLE, KeyConditionExpression="chain = :c", ScanIndexForward=False, Limit=1,
+                     ExpressionAttributeValues={":c": {"S": chain}}, ConsistentRead=True)["Items"]
+    if not last:
+        return 1, GENESIS
+    return int(last[0]["seq"]["N"]) + 1, last[0]["hash"]["S"]
 
 
 def append(entry: dict, subject: str | None = None, private: dict | None = None) -> dict:
-    """Append with an optimistic lock on the sequence number, so two writers cannot fork the chain.
+    """Add an entry. A lock on the sequence number stops two writers from forking the chain.
 
-    `private` is personal data about `subject`; it is written sealed, never as text."""
+    The private data is about the subject. It is written sealed, never as text.
+    """
     ddb, epoch = client("dynamodb"), _chain()
     entry = {"at": datetime.now(UTC).isoformat(timespec="milliseconds"), **entry}
     if private is not None:
         entry |= privacy.seal(subject, private)
     for _ in range(5):
-        last = ddb.query(TableName=TABLE, KeyConditionExpression="chain = :c", ScanIndexForward=False, Limit=1,
-                         ExpressionAttributeValues={":c": {"S": epoch}}, ConsistentRead=True)["Items"]
-        seq = int(last[0]["seq"]["N"]) + 1 if last else 1
-        prev = last[0]["hash"]["S"] if last else GENESIS
-        h = digest(prev, entry)
-        item = {"chain": {"S": epoch}, "seq": {"N": str(seq)}, "hash": {"S": h}, "prev": {"S": prev},
+        seq, prev = _last_row(ddb, epoch)
+        entry_hash = digest(prev, entry)
+        item = {"chain": {"S": epoch}, "seq": {"N": str(seq)}, "hash": {"S": entry_hash}, "prev": {"S": prev},
                 "entry": {"S": json.dumps(entry, ensure_ascii=False)}}
         if seq % CHECKPOINT_EVERY == 0:
-            item["signature"] = {"S": _sign(h)}
+            item["signature"] = {"S": _sign(entry_hash)}
         try:
             ddb.put_item(TableName=TABLE, Item=item, ConditionExpression="attribute_not_exists(seq)")
-        except ClientError as e:
-            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+        except ClientError as error:
+            if error.response["Error"]["Code"] == "ConditionalCheckFailedException":
                 continue
             raise
         client("s3").put_object(Bucket=ARCHIVE, Key=_archive_key(epoch, seq),
-                                Body=json.dumps({"seq": seq, "hash": h, "prev": prev, "entry": entry}).encode())
-        return {"seq": seq, "hash": h}
+                                Body=json.dumps({"seq": seq, "hash": entry_hash, "prev": prev, "entry": entry}).encode())
+        return {"seq": seq, "hash": entry_hash}
     raise RuntimeError("ledger append lost the race five times")
 
 
-def _sign(h: str) -> str:
-    sig = client("kms").sign(KeyId=KEY_ALIAS, Message=h.encode(), SigningAlgorithm="ECDSA_SHA_256")["Signature"]
-    return sig.hex()
+def _sign(entry_hash: str) -> str:
+    signed = client("kms").sign(KeyId=KEY_ALIAS, Message=entry_hash.encode(), SigningAlgorithm="ECDSA_SHA_256")
+    return signed["Signature"].hex()
 
 
-def _signature_ok(h: str, sig_hex: str) -> bool:
+def _signature_ok(entry_hash: str, signature_hex: str) -> bool:
     kms = client("kms")
     try:
-        return kms.verify(KeyId=KEY_ALIAS, Message=h.encode(), Signature=bytes.fromhex(sig_hex),
+        return kms.verify(KeyId=KEY_ALIAS, Message=entry_hash.encode(), Signature=bytes.fromhex(signature_hex),
                           SigningAlgorithm="ECDSA_SHA_256")["SignatureValid"]
     except kms.exceptions.KMSInvalidSignatureException:
         return False
 
 
 def verify() -> dict:
-    """Recompute every hash and check every signed checkpoint. Returns the first break, if any."""
+    """Redo each hash and check each signed checkpoint. Gives back the first break, if any."""
     rows = _rows()
     prev, checkpoints = GENESIS, 0
-    for r in rows:
-        if r["prev"] != prev or digest(prev, r["entry"]) != r["hash"]:
-            return {"ok": False, "entries": len(rows), "broken_at": r["seq"],
-                    "reason": f"Entry {r['seq']} does not match its hash. It was changed after it was written."}
-        if r["signature"]:
-            if not _signature_ok(r["hash"], r["signature"]):
-                return {"ok": False, "entries": len(rows), "broken_at": r["seq"], "reason": f"Checkpoint {r['seq']} signature is invalid."}
+    for row in rows:
+        if row["prev"] != prev or digest(prev, row["entry"]) != row["hash"]:
+            return {"ok": False, "entries": len(rows), "broken_at": row["seq"],
+                    "reason": f"Entry {row['seq']} does not match its hash. It was changed after it was written."}
+        if row["signature"]:
+            if not _signature_ok(row["hash"], row["signature"]):
+                return {"ok": False, "entries": len(rows), "broken_at": row["seq"],
+                        "reason": f"Checkpoint {row['seq']} signature is invalid."}
             checkpoints += 1
-        prev = r["hash"]
+        prev = row["hash"]
     return {"ok": True, "entries": len(rows), "checkpoints": checkpoints, "head": prev}
 
 
 def tamper(seq: int, field: str = "route", value: str = "send") -> dict:
-    """Demo: rewrite one stored entry the way an insider with table access would."""
+    """Demo: change one stored entry, as someone with table access could."""
     ddb, epoch = client("dynamodb"), _chain()
     key = {"chain": {"S": epoch}, "seq": {"N": str(seq)}}
     item = ddb.get_item(TableName=TABLE, Key=key)["Item"]
@@ -142,7 +156,7 @@ def tamper(seq: int, field: str = "route", value: str = "send") -> dict:
 
 
 def restore(seq: int) -> None:
-    """Undo a demo tamper from the locked archive copy, which is the record of truth."""
+    """Undo the demo change by using the locked archive copy. It is the true record."""
     epoch = _chain()
     body = json.loads(client("s3").get_object(Bucket=ARCHIVE, Key=_archive_key(epoch, seq))["Body"].read())
     client("dynamodb").update_item(
@@ -152,19 +166,20 @@ def restore(seq: int) -> None:
 
 
 def try_delete_archive(seq: int) -> dict:
-    """Demo: try to destroy the archived copy of an entry. Object Lock refuses."""
+    """Demo: try to destroy the archived copy of an entry. Object Lock says no."""
     s3, key = client("s3"), _archive_key(_chain(), seq)
     version = s3.head_object(Bucket=ARCHIVE, Key=key)["VersionId"]
     try:
         s3.delete_object(Bucket=ARCHIVE, Key=key, VersionId=version)
         return {"deleted": True, "key": key}
-    except ClientError as e:
-        return {"deleted": False, "key": key, "error": e.response["Error"]["Code"], "message": e.response["Error"].get("Message", "")}
+    except ClientError as error:
+        return {"deleted": False, "key": key, "error": error.response["Error"]["Code"],
+                "message": error.response["Error"].get("Message", "")}
 
 
-def erase_subject(subject: str, by: str) -> dict:
-    """Erase one person: delete their key, then record that it happened (the record names no one)."""
-    pid = privacy.pseudonym(subject)
+def erase_subject(subject: str, author: str) -> dict:
+    """Erase one person: delete their key, then record that it happened. The record names no one."""
+    pseudonym = privacy.pseudonym(subject)
     found = privacy.erase(subject)
-    append({"type": "erased", "subject": pid, "by": by, "had_data": found})
-    return {"subject": pid, "erased": found}
+    append({"type": "erased", "subject": pseudonym, "by": author, "had_data": found})
+    return {"subject": pseudonym, "erased": found}

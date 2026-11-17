@@ -1,17 +1,18 @@
-"""Hybrid retrieval over approved content (ADR 0012).
+"""Hybrid search over approved content (ADR 0012).
 
 Two layers, in this order:
-1. The facet gate is a hard filter in SQL: tenant (row-level security), product, country, approved,
-   and today inside the approval window. Nothing outside it can be returned, whatever the ranking says.
-2. Inside the gate, full-text rank and vector rank are fused with reciprocal rank fusion.
-Similarity alone would happily return an American dose for a German question, which is why the gate comes first.
+1. The facet gate is a hard filter in SQL. It checks tenant, product, country, approval and the approval dates.
+   Nothing outside it can come back.
+2. Inside the gate, text rank and vector rank are joined with rank fusion.
+
+A search on meaning alone could return a US dose for a German question. So the gate comes first.
 """
 
 import re
 
 from hcpagents import cache, db, embeddings, store, world
 
-RRF_K = 60  # the constant from the original reciprocal rank fusion paper; larger flattens the difference between ranks
+RRF_K = 60  # the fusion constant; a bigger number makes top ranks count less
 
 GATE = """
     d.kind = 'content'
@@ -19,63 +20,88 @@ GATE = """
     AND d.doc ->> 'status' = 'approved'
     AND (d.doc ->> 'approved_on')::date <= %(today)s AND %(today)s <= (d.doc ->> 'expires_on')::date
 """
+TOPIC_CLAUSE = "AND (%(topic)s::text IS NULL OR d.doc ->> 'topic' = %(topic)s)"
 
 
 def index() -> int:
-    """Embed every content block of the current tenant under the active model. Returns how many."""
+    """Embed each content block of the current tenant under the active model. Gives back how many."""
     blocks = list(store.content().values())
-    emb = embeddings.embedder()
-    vectors = emb.embed([b["text"] for b in blocks])
+    embedder = embeddings.embedder()
+    vectors = embedder.embed([block["text"] for block in blocks])
     with db.session() as conn:
-        for b, v in zip(blocks, vectors, strict=True):
+        for block, vector in zip(blocks, vectors, strict=True):
             conn.execute(
                 "INSERT INTO content_index (tenant_id, block_id, model_id, dim, embedding) "
                 "VALUES (current_setting('app.tenant_id'), %s, %s, %s, %s::vector) "
                 "ON CONFLICT (tenant_id, block_id, model_id) DO UPDATE SET embedding = EXCLUDED.embedding",
-                (b["id"], emb.model_id, emb.dim, embeddings.literal(v)))
+                (block["id"], embedder.model_id, embedder.dim, embeddings.literal(vector)))
     cache.flush_tenant(world.current_tenant())
     return len(blocks)
 
 
-def search(query: str, product: str, country: str, topic: str | None = None, k: int = 5, mode: str = "hybrid") -> list[dict]:
-    """The best k current blocks for a question, from the cache when this exact question was asked recently (ADR 0018).
+def search(query: str, product: str, country: str, topic: str | None = None, limit: int = 5,
+           mode: str = "hybrid", **aliases) -> list[dict]:
+    """The best current blocks for a question. A cache answers if the same question came up lately (ADR 0018).
 
-    `topic` narrows inside the gate when the caller already knows it. mode "fts" or "vector" ranks with
-    one signal only; the retrieval eval compares them with "hybrid".
+    The topic narrows the search inside the gate when the caller knows it. The old name k still works for limit.
+    The mode "fts" or "vector" ranks with one signal only. The eval compares them with "hybrid".
     """
+    if "k" in aliases:
+        limit = aliases["k"]
     tenant = world.current_tenant()
-    k_ = cache.key(tenant, query=query, product=product, country=country, topic=topic, k=k, mode=mode,
-                   today=world.TODAY, model=embeddings.embedder().model_id)
-    if (hit := cache.get(k_)) is not None:
+    cache_key = cache.key(tenant, query=query, product=product, country=country, topic=topic, k=limit, mode=mode,
+                          today=world.TODAY, model=embeddings.embedder().model_id)
+    hit = cache.get(cache_key)
+    if hit is not None:
         return hit
-    results = _rank(query, product, country, topic, k, mode)
-    cache.put(tenant, k_, results)
+    results = _rank(query, product, country, topic, limit, mode)
+    cache.put(tenant, cache_key, results)
     return results
 
 
-def _rank(query: str, product: str, country: str, topic: str | None, k: int, mode: str) -> list[dict]:
-    emb = embeddings.embedder()
-    params = {"product": product, "country": country, "today": world.TODAY, "topic": topic, "words": " | ".join(re.findall(r"\w+", query.lower())) or "''",
-              "vec": embeddings.literal(emb.embed([query])[0]), "model": emb.model_id, "pool": max(k * 4, 20)}
-    topic_clause = "AND (%(topic)s::text IS NULL OR d.doc ->> 'topic' = %(topic)s)"
-    with db.session() as conn:
-        fts = conn.execute(f"""
-            SELECT d.id FROM docs d WHERE {GATE} {topic_clause}
+def _full_text(conn, params: dict) -> list[dict]:
+    return conn.execute(f"""
+            SELECT d.id FROM docs d WHERE {GATE} {TOPIC_CLAUSE}
               AND to_tsvector('simple', d.doc ->> 'text') @@ to_tsquery('simple', %(words)s)
             ORDER BY ts_rank(to_tsvector('simple', d.doc ->> 'text'), to_tsquery('simple', %(words)s)) DESC, d.id
-            LIMIT %(pool)s""", params).fetchall() if mode != "vector" else []
-        vec = conn.execute(f"""
+            LIMIT %(pool)s""", params).fetchall()
+
+
+def _by_vector(conn, params: dict) -> list[dict]:
+    return conn.execute(f"""
             SELECT d.id FROM docs d JOIN content_index c
               ON c.block_id = d.id AND c.tenant_id = d.tenant_id AND c.model_id = %(model)s
-            WHERE {GATE} {topic_clause}
+            WHERE {GATE} {TOPIC_CLAUSE}
             ORDER BY c.embedding <=> %(vec)s::vector, d.id
-            LIMIT %(pool)s""", params).fetchall() if mode != "fts" else []
+            LIMIT %(pool)s""", params).fetchall()
+
+
+def _best_first(score: dict[str, float]) -> list[str]:
+    def order(block_id: str) -> tuple:
+        return -score[block_id], block_id
+
+    return sorted(score, key=order)
+
+
+def _rank(query: str, product: str, country: str, topic: str | None, limit: int, mode: str) -> list[dict]:
+    embedder = embeddings.embedder()
+    params = {"product": product, "country": country, "today": world.TODAY, "topic": topic,
+              "words": " | ".join(re.findall(r"\w+", query.lower())) or "''",
+              "vec": embeddings.literal(embedder.embed([query])[0]), "model": embedder.model_id,
+              "pool": max(limit * 4, 20)}
+    with db.session() as conn:
+        full_text, by_vector = [], []
+        if mode != "vector":
+            full_text = _full_text(conn, params)
+        if mode != "fts":
+            by_vector = _by_vector(conn, params)
         score: dict[str, float] = {}
-        for ranked in (fts, vec):
+        for ranked in (full_text, by_vector):
             for rank, row in enumerate(ranked, start=1):
                 score[row["id"]] = score.get(row["id"], 0.0) + 1.0 / (RRF_K + rank)
-        top = sorted(score, key=lambda i: (-score[i], i))[:k]
-        by_id = {r["id"]: r["doc"] for r in conn.execute(
+        top = _best_first(score)[:limit]
+        by_id = {row["id"]: row["doc"] for row in conn.execute(
             "SELECT id, doc FROM docs WHERE kind = 'content' AND id = ANY(%s)", (top,))}
-    return [{"block_id": by_id[i]["id"], "version": by_id[i]["version"], "topic": by_id[i]["topic"],
-             "text": by_id[i]["text"], "score": round(score[i], 5)} for i in top]
+    return [{"block_id": by_id[block_id]["id"], "version": by_id[block_id]["version"],
+             "topic": by_id[block_id]["topic"], "text": by_id[block_id]["text"],
+             "score": round(score[block_id], 5)} for block_id in top]

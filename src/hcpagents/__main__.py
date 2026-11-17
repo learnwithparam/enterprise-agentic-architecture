@@ -1,4 +1,7 @@
-"""uv run python -m hcpagents run <inquiry-id|all>    run inquiries (replay; LIVE=1 records)"""
+"""uv run python -m hcpagents run <inquiry-id|all>
+
+This runs the inquiries. Set LIVE=1 to record them.
+"""
 
 import asyncio
 import sys
@@ -6,13 +9,22 @@ import sys
 from hcpagents import agents, cases, evals, gateway, world
 
 
+def _is_safe(case: dict, inquiry: dict) -> bool:
+    return case["route"] == inquiry["expect"] or case["route"] in inquiry.get("also_safe", [])
+
+
 async def main(target: str) -> None:
-    ids = [i["id"] for i in world.inquiries()] if target == "all" else [target]
-    for i in ids:
-        d = await cases.run(i)
-        inq = world.inquiry(i)
-        ok = d["route"] == inq["expect"] or d["route"] in inq.get("also_safe", [])
-        print(f"{i:22} {d['route']:11} expect {inq['expect']:11} {'ok ' if ok else 'MISS'} ${d['cost_usd']:.5f} {d['mode']}")
+    if target == "all":
+        ids = [inquiry["id"] for inquiry in world.inquiries()]
+    else:
+        ids = [target]
+    for inquiry_id in ids:
+        case = await cases.run(inquiry_id)
+        inquiry = world.inquiry(inquiry_id)
+        verdict = "MISS"
+        if _is_safe(case, inquiry):
+            verdict = "ok "
+        print(f"{inquiry_id:22} {case['route']:11} expect {inquiry['expect']:11} {verdict} ${case['cost_usd']:.5f} {case['mode']}")
     if agents.live():
         print(f"live spend this run: ${agents.SPEND.session:.5f}")
         if target == "all":

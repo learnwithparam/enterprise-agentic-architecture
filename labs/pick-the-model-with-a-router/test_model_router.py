@@ -1,4 +1,4 @@
-"""Pick the model with a router: Haiku by default, Sonnet when the work or a failure asks for it, then a person."""
+"""Pick the model with a router. Haiku is the default. Sonnet takes work that needs it or a retry. After that, a person."""
 
 import pytest
 

@@ -38,6 +38,7 @@ check: up      ## the gate: tests, evals, mutants, prose, web build, mermaid, CS
 	uv run python -m hcpagents.retrieval_eval
 	uv run python scripts/mutate.py
 	uv run python scripts/check_prose.py
+	uv run python scripts/check_readable.py
 	$(MAKE) web
 	cd web && npx playwright-core install --only-shell --no-remove chromium > /dev/null
 	node web/scripts/check-mermaid.mjs

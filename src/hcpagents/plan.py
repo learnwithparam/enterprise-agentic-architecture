@@ -1,8 +1,8 @@
-"""The assembler's plan as a LangGraph: select blocks, check they cover every question, and try once more if not.
+"""The assembler plan as a LangGraph. It picks blocks, checks they cover each question, and tries once more if not.
 
-LangGraph runs only the thinking inside the `assemble` step. The kernel (kernel.py) still owns which steps
-exist, and it bounds this graph's loop. Nothing here sets a fact or a route; it returns a selection that the
-grounding verifier checks next (ADR 0014).
+LangGraph runs only the thinking inside the assemble step. The kernel still owns which steps exist.
+The kernel also limits the loop of this graph.
+Nothing here sets a fact or a route. It returns a pick that the grounding check reads next (ADR 0014).
 """
 
 import json
@@ -14,10 +14,10 @@ from langgraph.graph import END, START, StateGraph
 from hcpagents import kernel
 
 MAX_ATTEMPTS = 2
-# What the compiled graph may do. tests/test_plan.py proves the graph and this table agree.
+# What the built graph may do. A test proves the graph and this table agree.
 EDGES = {("__start__", "select"), ("select", "check"), ("check", "select"), ("check", "__end__")}
 
-Ask = Callable[[str], Awaitable[tuple[dict, set[str]]]]  # prompt -> (agent output, block ids a tool returned)
+Ask = Callable[[str], Awaitable[tuple[dict, set[str]]]]  # Takes a prompt. Returns the agent output and the block ids a tool returned.
 
 
 class State(TypedDict):
@@ -29,41 +29,44 @@ class State(TypedDict):
 
 
 def _prompt(product: str, country: str, questions: list[dict], retry: list[str]) -> str:
-    body = {"product": product, "country": country, "questions": [{"text": q["text"], "topic": q["topic"]} for q in questions]}
+    body = {"product": product, "country": country,
+            "questions": [{"text": question["text"], "topic": question["topic"]} for question in questions]}
     if retry:
         body["retry"] = {"not_covered": retry, "note": "Search again for these using different words from the question."}
     return json.dumps(body)
 
 
 def build(ask: Ask, product: str, country: str, questions: list[dict], content: dict[str, dict]):
-    async def select(s: State) -> dict:
-        kernel.check_attempt(s["attempt"] + 1, MAX_ATTEMPTS)
-        out, seen = await ask(_prompt(product, country, questions, s["uncovered"]))
-        seen = s["seen"] | seen
-        answers, rejected = [], list(s["rejected"])
-        for a in out["answers"]:
-            # Only ids a permitted tool call returned, for this product and country, survive.
-            ok = [b for b in a["block_ids"] if b in seen and b in content
-                  and content[b]["product"] == product and content[b]["country"] == country]
-            rejected += [b for b in a["block_ids"] if b not in ok]
-            answers.append({"question": a["question"], "block_ids": ok})
-        return {"attempt": s["attempt"] + 1, "seen": seen, "answers": answers, "rejected": rejected,
+    async def select(state: State) -> dict:
+        kernel.check_attempt(state["attempt"] + 1, MAX_ATTEMPTS)
+        out, seen = await ask(_prompt(product, country, questions, state["uncovered"]))
+        seen = state["seen"] | seen
+        answers, rejected = [], list(state["rejected"])
+        for answer in out["answers"]:
+            # Keep only ids that a tool call returned for this product and country.
+            kept = [block for block in answer["block_ids"] if block in seen and block in content
+                    and content[block]["product"] == product and content[block]["country"] == country]
+            rejected += [block for block in answer["block_ids"] if block not in kept]
+            answers.append({"question": answer["question"], "block_ids": kept})
+        return {"attempt": state["attempt"] + 1, "seen": seen, "answers": answers, "rejected": rejected,
                 "uncovered": list(out["uncovered"])}
 
-    async def check(s: State) -> dict:
-        empty = [a["question"] for a in s["answers"] if not a["block_ids"]]
-        return {"uncovered": list(dict.fromkeys(s["uncovered"] + empty))}
+    async def check(state: State) -> dict:
+        empty = [answer["question"] for answer in state["answers"] if not answer["block_ids"]]
+        return {"uncovered": list(dict.fromkeys(state["uncovered"] + empty))}
 
-    def again(s: State) -> str:
-        return "select" if s["uncovered"] and s["attempt"] < MAX_ATTEMPTS else END
+    def again(state: State) -> str:
+        if state["uncovered"] and state["attempt"] < MAX_ATTEMPTS:
+            return "select"
+        return END
 
-    g = StateGraph(State)
-    g.add_node("select", select)
-    g.add_node("check", check)
-    g.add_edge(START, "select")
-    g.add_edge("select", "check")
-    g.add_conditional_edges("check", again, {"select": "select", END: END})
-    return g.compile()
+    graph = StateGraph(State)
+    graph.add_node("select", select)
+    graph.add_node("check", check)
+    graph.add_edge(START, "select")
+    graph.add_edge("select", "check")
+    graph.add_conditional_edges("check", again, {"select": "select", END: END})
+    return graph.compile()
 
 
 async def run(ask: Ask, product: str, country: str, questions: list[dict], content: dict[str, dict]) -> dict:

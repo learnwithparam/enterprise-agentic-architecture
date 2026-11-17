@@ -1,10 +1,10 @@
-"""Personal data in the ledger is sealed under a key per person, and erasing the person deletes the key.
+"""Each person's data in the ledger is sealed with their own key. To erase them, delete the key.
 
-The ledger is append-only and locked for ten years, so a name or a quoted symptom cannot be deleted from it.
-It does not have to be. The ledger stores a pseudonym and ciphertext; the key sits in SSM, one per person.
-Deleting the key leaves every hash, signature and archived object untouched and makes the text unreadable
-(ADR 0015). The pseudonym is an HMAC under a per-tenant secret, so it links one person's entries to each
-other and to nothing else.
+The ledger only grows, and it is locked for ten years. So a name or a quoted symptom cannot be deleted from it.
+It does not have to be. The ledger holds a pseudonym and ciphertext. The key sits in SSM, one for each person.
+
+Deleting the key leaves each hash, signature and archived object as it was. The text can no longer be read (ADR 0015).
+The pseudonym is an HMAC under a secret for each tenant. It links one person's entries to each other and to nothing else.
 """
 
 import base64
@@ -30,8 +30,8 @@ def _name(kind: str, ident: str) -> str:
 def _get(name: str) -> bytes | None:
     try:
         return base64.b64decode(client("ssm").get_parameter(Name=name, WithDecryption=True)["Parameter"]["Value"])
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "ParameterNotFound":
+    except ClientError as error:
+        if error.response["Error"]["Code"] == "ParameterNotFound":
             return None
         raise
 
@@ -41,9 +41,13 @@ def _put(name: str, value: bytes) -> None:
 
 
 def _secret(kind: str, ident: str) -> bytes:
-    """Read a 32-byte secret, creating it on first use."""
+    """Read a 32-byte secret. Make it the first time it is used."""
     name = _name(kind, ident)
-    return _get(name) or (_put(name, os.urandom(32)), _get(name))[1]
+    found = _get(name)
+    if found:
+        return found
+    _put(name, os.urandom(32))
+    return _get(name)
 
 
 def pseudonym(subject: str) -> str:
@@ -52,18 +56,18 @@ def pseudonym(subject: str) -> str:
 
 
 def seal(subject: str, data: dict) -> dict:
-    """The two ledger fields that replace the personal data: who it is about (pseudonym) and the ciphertext."""
+    """The two ledger fields that replace the personal data. They are who it is about (a pseudonym) and the ciphertext."""
     pid = pseudonym(subject)
     nonce = os.urandom(NONCE_BYTES)
-    ct = AESGCM(_secret("key", pid)).encrypt(nonce, json.dumps(data, ensure_ascii=False).encode(), pid.encode())
-    return {"subject": pid, "sealed": base64.b64encode(nonce + ct).decode()}
+    cipher = AESGCM(_secret("key", pid)).encrypt(nonce, json.dumps(data, ensure_ascii=False).encode(), pid.encode())
+    return {"subject": pid, "sealed": base64.b64encode(nonce + cipher).decode()}
 
 
 def reveal(entry: dict) -> dict:
-    """The entry with its sealed data opened as `private`, or `private: {"erased": True}` once the key is gone."""
+    """The entry with its sealed data opened as private. Once the key is gone, private is erased."""
     if "sealed" not in entry:
         return entry
-    plain = {k: v for k, v in entry.items() if k != "sealed"}
+    plain = {name: value for name, value in entry.items() if name != "sealed"}
     key = _get(_name("key", entry["subject"]))
     if key is None:
         return plain | {"private": {"erased": True}}
@@ -76,7 +80,7 @@ def reveal(entry: dict) -> dict:
 
 
 def erase(subject: str) -> bool:
-    """Delete the person's key. True when there was a key to delete."""
+    """Delete the key of the person. True if there was a key to delete."""
     name = _name("key", pseudonym(subject))
     if _get(name) is None:
         return False

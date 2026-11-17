@@ -1,7 +1,7 @@
-"""The synthetic world: products, label scope, approved content, HCPs, people and the inbox.
+"""The made-up world. It holds the products, the label scope, approved content, doctors, people and the inbox.
 
-Everything here is read from world/*.toml and policies/autonomy.toml. The TOML files are the
-seed; once provisioned, content status lives in DynamoDB so a withdrawal is a real write.
+All of it comes from world/*.toml and policies/autonomy.toml. These files are the seed.
+After setup, the content status lives in DynamoDB. So a withdrawal is a real write.
 """
 
 import os
@@ -16,8 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def load_env(root: Path = ROOT) -> None:
-    """Read the repo's env file into this process only. Never printed, never sourced by a shell,
-    and a variable already set in the shell wins."""
+    """Read the repo's env file into this process only. It is never printed or run by a shell. A variable already set in the shell wins."""
     path = root / (chr(46) + "env")
     if not path.exists():
         return
@@ -29,7 +28,7 @@ def load_env(root: Path = ROOT) -> None:
 
 load_env()
 
-# The demo clock. Content expiry is judged against this date so the demo is repeatable.
+# The demo clock. Content expiry is judged by this date, so the demo is the same each time.
 TODAY = date.fromisoformat(os.environ.get("MI_TODAY", "2026-10-15"))
 
 ROUTES = ("send", "review", "pv", "offlabel", "specialist", "decline")
@@ -50,8 +49,8 @@ def tenants() -> list[dict]:
     return _load("world/tenants.toml")["tenant"]
 
 
-# The tenant a request or job acts for. Each tenant has its own company, content, HCPs and inbox:
-# quillon in world/, every other one in world/tenants/<id>/. People and policy are shared files.
+# The tenant that a request or job acts for. Each tenant has its own company, content, doctors and inbox.
+# Quillon is in world/. Every other tenant is in world/tenants/<id>/. People and policy are shared files.
 DEFAULT_TENANT = "quillon"
 _tenant: ContextVar[str] = ContextVar("tenant", default=DEFAULT_TENANT)
 
@@ -62,7 +61,7 @@ def current_tenant() -> str:
 
 @contextmanager
 def as_tenant(tenant_id: str):
-    """Everything inside this block reads and writes as this tenant."""
+    """Code in this block reads and writes as this tenant."""
     token = _tenant.set(tenant_id)
     try:
         yield
@@ -72,9 +71,11 @@ def as_tenant(tenant_id: str):
 
 @cache
 def _tenant_file(tenant: str, name: str) -> dict:
-    if tenant not in {t["id"] for t in tenants()}:
+    if tenant not in {known["id"] for known in tenants()}:
         raise KeyError(f"Unknown tenant {tenant!r}")
-    return _load(f"world/{name}.toml" if tenant == DEFAULT_TENANT else f"world/tenants/{tenant}/{name}.toml")
+    if tenant == DEFAULT_TENANT:
+        return _load(f"world/{name}.toml")
+    return _load(f"world/tenants/{tenant}/{name}.toml")
 
 
 def products() -> dict:
@@ -94,19 +95,19 @@ def inquiries() -> list[dict]:
 
 
 def agents() -> list[dict]:
-    """The agent roster: goal, what each perceives, what it does alone, what it proposes and what it never does."""
+    """The agent roster. For each agent: its goal, what it sees, what it does alone, what it proposes, and what it never does."""
     return _load("world/agents.toml")["agent"]
 
 
 @cache
 def directory() -> list[dict]:
-    """Everyone who can sign in, across tenants. Only the sign-in path and provisioning read it."""
+    """Everyone who can sign in, in all tenants. Only sign-in and setup read it."""
     return _load("world/people.toml")["user"]
 
 
 def people() -> list[dict]:
     """The people of the current tenant."""
-    return [u for u in directory() if u.get("tenant", DEFAULT_TENANT) == current_tenant()]
+    return [user for user in directory() if user.get("tenant", DEFAULT_TENANT) == current_tenant()]
 
 
 @cache
@@ -115,26 +116,26 @@ def autonomy_seed() -> dict:
 
 
 def product(code: str) -> dict | None:
-    return next((p for p in products()["product"] if p["code"] == code), None)
+    return next((item for item in products()["product"] if item["code"] == code), None)
 
 
 def country(code: str) -> dict:
-    return next(c for c in products()["country"] if c["code"] == code)
+    return next(item for item in products()["country"] if item["code"] == code)
 
 
 def scope(product_code: str, country_code: str) -> dict | None:
     return next(
-        (s for s in products()["scope"] if s["product"] == product_code and s["country"] == country_code),
+        (item for item in products()["scope"] if item["product"] == product_code and item["country"] == country_code),
         None,
     )
 
 
 def hcp(hcp_id: str | None) -> dict | None:
-    return next((h for h in hcp_world()["hcp"] if h["id"] == hcp_id), None)
+    return next((doctor for doctor in hcp_world()["hcp"] if doctor["id"] == hcp_id), None)
 
 
 def person(user_id: str) -> dict | None:
-    return next((u for u in directory() if u["id"] == user_id), None)
+    return next((user for user in directory() if user["id"] == user_id), None)
 
 
 def inquiry(inquiry_id: str) -> dict | None:

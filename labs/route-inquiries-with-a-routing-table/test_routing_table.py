@@ -1,4 +1,4 @@
-"""Route inquiries with a routing table: the order of the rows is the policy, and an unknown fact waits."""
+"""Route inquiries with a routing table. The order of the rows is the policy. An unknown fact waits."""
 
 from hcpagents import graph
 
@@ -22,7 +22,7 @@ def test_any_one_fact_going_wrong_stops_the_send():
 
 
 def test_the_engine_waits_for_a_fact_instead_of_guessing():
-    assert graph.decide({k: v for k, v in SAFE.items() if k != "grounded"}) is None
+    assert graph.decide({fact: value for fact, value in SAFE.items() if fact != "grounded"}) is None
 
 
 def test_the_step_functions_definition_comes_from_the_same_table():

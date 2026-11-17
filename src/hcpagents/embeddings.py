@@ -1,9 +1,11 @@
-"""Embeddings behind a port, so the provider is a config choice and never a code edit (ADR 0012).
+"""Embeddings sit behind a port. The provider is a config choice, never a code edit (ADR 0012).
 
-An adapter turns texts into vectors and names itself with `model_id` and `dim`. Every stored vector
-carries both, and a query only compares against vectors made by the same model, so two models never mix.
-MI_EMBEDDINGS picks the adapter: "onnx" (default, a local multilingual model, no key) or "hash" (no
-download, for offline runs). A hosted adapter (Voyage, Bedrock) is one more class with the same three members.
+An adapter turns texts into vectors. It names itself with model_id and dim. Each stored vector holds both.
+A query only compares with vectors from the same model. So two models never mix.
+
+MI_EMBEDDINGS picks the adapter. The onnx one is the default: a local model for many languages, with no key.
+The hash one needs no download and is for offline runs.
+A hosted adapter (Voyage, Bedrock) is one more class with the same three members.
 """
 
 import hashlib
@@ -24,7 +26,7 @@ class Embedder(Protocol):
 
 
 class OnnxEmbedder:
-    """A local multilingual model run by fastembed on ONNX Runtime. A German question finds an English block."""
+    """A local model run by fastembed on ONNX Runtime. It works in many languages, so a German question finds an English block."""
     model_id, dim = ONNX_MODEL, 384
 
     def __init__(self):
@@ -32,22 +34,22 @@ class OnnxEmbedder:
         self._model = TextEmbedding(self.model_id)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        return [v.tolist() for v in self._model.embed(texts)]
+        return [vector.tolist() for vector in self._model.embed(texts)]
 
 
 class HashingEmbedder:
-    """Words hashed into buckets. Deterministic and instant, but it only matches shared words, not meaning."""
+    """Words hashed into buckets. It is fast and the same each time, but it matches shared words, not meaning."""
     model_id, dim = "hashing-256", 256
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        return [self._one(t) for t in texts]
+        return [self._one(text) for text in texts]
 
     def _one(self, text: str) -> list[float]:
-        v = [0.0] * self.dim
+        vector = [0.0] * self.dim
         for word in re.findall(r"\w+", text.lower()):
-            v[int(hashlib.sha256(word.encode()).hexdigest(), 16) % self.dim] += 1.0
-        norm = math.sqrt(sum(x * x for x in v)) or 1.0
-        return [x / norm for x in v]
+            vector[int(hashlib.sha256(word.encode()).hexdigest(), 16) % self.dim] += 1.0
+        norm = math.sqrt(sum(value * value for value in vector)) or 1.0
+        return [value / norm for value in vector]
 
 
 ADAPTERS = {"onnx": OnnxEmbedder, "hash": HashingEmbedder}
@@ -62,5 +64,5 @@ def embedder() -> Embedder:
 
 
 def literal(vector: list[float]) -> str:
-    """The pgvector text form, so no extra client package is needed."""
-    return "[" + ",".join(f"{x:.6f}" for x in vector) + "]"
+    """The pgvector text form. It needs no extra client package."""
+    return "[" + ",".join(f"{part:.6f}" for part in vector) + "]"

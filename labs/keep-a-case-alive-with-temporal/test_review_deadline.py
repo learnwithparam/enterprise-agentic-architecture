@@ -1,4 +1,4 @@
-"""Keep a case alive with Temporal: a review nobody decides is escalated once, and a late decision still lands."""
+"""Keep a case alive with Temporal. If nobody decides a review, it goes up once. A late decision still lands."""
 
 import asyncio
 import uuid
@@ -14,14 +14,14 @@ BRANDT = world.person("u-brandt")
 
 
 def types(case_id: str) -> list[str]:
-    return [r["entry"]["type"] for r in ledger.entries(case_id)]
+    return [row["entry"]["type"] for row in ledger.entries(case_id)]
 
 
 def run_with_deadline(sla_seconds: int):
-    """Start inq-103 with a short reviewer deadline, wait for the overdue entry, then reject late."""
+    """Start inq-103 with a short reviewer deadline. Wait for the overdue entry, then reject late."""
     queue = f"q-{uuid.uuid4().hex}"
 
-    async def go():
+    async def run_case():
         client = await durable.connect()
         async with durable.worker(client, queue):
             await client.execute_workflow(InquiryWorkflow.run, {"tenant": world.current_tenant(), "inquiry_id": "inq-103",
@@ -29,10 +29,10 @@ def run_with_deadline(sla_seconds: int):
             async with asyncio.timeout(20):
                 while "review_overdue" not in types("inq-103"):
                     await asyncio.sleep(0.3)
-            await asyncio.sleep(1.5)  # long enough for a second escalation, if the code were going to send one
+            await asyncio.sleep(1.5)  # This is long enough for a second escalation, if the code were to send one.
             return await durable.decide("inq-103", BRANDT, "reject", note="late", client=client)
 
-    return asyncio.run(go())
+    return asyncio.run(run_case())
 
 
 @pytest.fixture(autouse=True)

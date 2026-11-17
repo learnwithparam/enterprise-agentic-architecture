@@ -1,4 +1,7 @@
-"""Isolate tenants with row level security: the database refuses the crossing, whatever the application code says."""
+"""Isolate tenants with row level security.
+
+The database stops any crossing. The app code cannot change that.
+"""
 
 import psycopg
 import pytest
@@ -36,7 +39,7 @@ def test_a_second_tenant_starts_with_an_empty_world():
 
 
 def test_the_docs_policy_in_the_migration_checks_the_tenant_on_read_and_write():
-    """Reads the SQL itself, so a weakened migration fails before it is ever applied."""
+    """It reads the SQL itself. So a weak migration fails before it is used."""
     sql = (db.MIGRATIONS / "001_documents.sql").read_text()
     clause = "tenant_id = current_setting('app.tenant_id', true)"
     assert "ALTER TABLE docs FORCE ROW LEVEL SECURITY;" in sql

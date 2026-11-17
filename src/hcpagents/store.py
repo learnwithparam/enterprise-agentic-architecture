@@ -1,5 +1,5 @@
-"""JSON documents in Postgres, one row per document, scoped to the current tenant by row-level security.
-Content, cases, HCPs and touches all use this. `table` keeps its old mi-* name so callers did not change."""
+"""JSON documents in Postgres, one row per document, kept apart for each tenant.
+Content, cases, doctors and touches all use this. The table name keeps its old mi- prefix."""
 
 from psycopg.types.json import Jsonb
 
@@ -13,7 +13,9 @@ def _kind(table: str) -> str:
 def get(table: str, doc_id: str) -> dict | None:
     with db.session() as conn:
         row = conn.execute("SELECT doc FROM docs WHERE kind = %s AND id = %s", (_kind(table), doc_id)).fetchone()
-    return row["doc"] if row else None
+    if row:
+        return row["doc"]
+    return None
 
 
 def put(table: str, doc: dict) -> None:
@@ -26,9 +28,9 @@ def put(table: str, doc: dict) -> None:
 
 def scan(table: str) -> list[dict]:
     with db.session() as conn:
-        return [r["doc"] for r in conn.execute("SELECT doc FROM docs WHERE kind = %s ORDER BY id", (_kind(table),))]
+        return [row["doc"] for row in conn.execute("SELECT doc FROM docs WHERE kind = %s ORDER BY id", (_kind(table),))]
 
 
 def content() -> dict[str, dict]:
     """The content store as it is now, keyed by block id."""
-    return {b["id"]: b for b in scan("mi-content")}
+    return {block["id"]: block for block in scan("mi-content")}

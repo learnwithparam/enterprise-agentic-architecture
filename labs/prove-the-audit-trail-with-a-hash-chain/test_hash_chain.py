@@ -1,4 +1,4 @@
-"""Prove the audit trail with a hash chain: an edit to any past entry is found, and the archive outlives it."""
+"""Prove the audit trail with a hash chain. An edit to any past entry is found, and the archive outlives it."""
 
 import copy
 
@@ -13,19 +13,19 @@ ENTRIES = [{"type": "case_received", "case": "inq-105"},
 
 def chain(entries):
     prev, rows = ledger.GENESIS, []
-    for e in copy.deepcopy(entries):
-        h = ledger.digest(prev, e)
-        rows.append({"prev": prev, "entry": e, "hash": h})
-        prev = h
+    for entry in copy.deepcopy(entries):
+        entry_hash = ledger.digest(prev, entry)
+        rows.append({"prev": prev, "entry": entry, "hash": entry_hash})
+        prev = entry_hash
     return rows
 
 
 def first_break(rows):
     prev = ledger.GENESIS
-    for i, r in enumerate(rows):
-        if r["prev"] != prev or ledger.digest(prev, r["entry"]) != r["hash"]:
+    for i, row in enumerate(rows):
+        if row["prev"] != prev or ledger.digest(prev, row["entry"]) != row["hash"]:
             return i
-        prev = r["hash"]
+        prev = row["hash"]
     return None
 
 

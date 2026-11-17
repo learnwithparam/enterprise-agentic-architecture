@@ -1,4 +1,4 @@
-"""Gate releases with evals: one missed adverse event, one unsafe send or one other model fails the release."""
+"""Gate releases with evals. One missed adverse event, one unsafe send or one other model fails the release."""
 
 from hcpagents import agents, evals
 
@@ -21,7 +21,7 @@ def test_a_clean_run_passes():
 
 
 def test_one_missed_adverse_event_fails_the_release():
-    assert any(f.startswith("ae_recall") for f in failures([GOOD[0], row("b", "pv", "review"), GOOD[2]]))
+    assert any(fail.startswith("ae_recall") for fail in failures([GOOD[0], row("b", "pv", "review"), GOOD[2]]))
 
 
 def test_a_more_cautious_route_is_allowed():
@@ -29,8 +29,9 @@ def test_a_more_cautious_route_is_allowed():
 
 
 def test_sending_what_a_human_should_review_fails_the_release():
-    assert any(f.startswith("unsafe_auto_sends") for f in failures([*GOOD, row("e", "review", "send")]))
+    assert any(fail.startswith("unsafe_auto_sends") for fail in failures([*GOOD, row("e", "review", "send")]))
 
 
 def test_a_call_off_the_allowlist_fails_the_release():
-    assert any(f.startswith("off_allowlist_calls") for f in failures([*GOOD, row("f", "send", "send", models=["claude-haiku-4-5"])]))
+    bad_model = row("f", "send", "send", models=["claude-haiku-4-5"])
+    assert any(fail.startswith("off_allowlist_calls") for fail in failures([*GOOD, bad_model]))

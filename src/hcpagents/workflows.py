@@ -1,8 +1,8 @@
-"""One inquiry as a Temporal workflow. Temporal's history is the only durable record of where a case is.
+"""One inquiry as a Temporal workflow. Temporal keeps the only lasting record of where a case is.
 
-The workflow is deterministic and does no I/O. It asks the kernel whether each step may run, has an
-activity run it, and asks the kernel again whether the facts imply a route. If the worker dies, another
-replays this history and continues from the last finished step (ADR 0016).
+This workflow does no input or output. It asks the kernel if each step may run.
+A task runs the step. Then it asks the kernel if the facts imply a route.
+If the worker dies, another replays this history and goes on from the last finished step (ADR 0016).
 """
 
 import asyncio
@@ -13,16 +13,16 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.workflow import ParentClosePolicy
 
-# Activities are called by name, so this module imports only the pure kernel.
+# Tasks are called by name, so this file imports only the kernel.
 with workflow.unsafe.imports_passed_through():
     from hcpagents import kernel
 
 STEP_TIMEOUT = timedelta(minutes=5)
 RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=1))
-REVIEW_SLA = timedelta(hours=24)  # a draft nobody has decided in this long is escalated, never sent
+REVIEW_SLA = timedelta(hours=24)  # A draft left too long is escalated, never sent.
 CLOSED = ("sent", "rejected")
-STEWARD_POLL_S = 5.0  # how often the content steward looks for withdrawn content
-STEWARD_CYCLES = 200  # passes before the history is rolled over, so an always-on workflow never grows without bound
+STEWARD_POLL_S = 5.0  # How often the content steward looks for withdrawn content.
+STEWARD_CYCLES = 200  # Passes before the history restarts, so it stays small.
 
 
 def review_id(tenant: str, case_id: str) -> str:
@@ -43,7 +43,7 @@ class InquiryWorkflow:
 
     @workflow.run
     async def run(self, args: dict) -> dict:
-        """args: tenant, inquiry_id, and optionally the inquiry itself (a typed question has no file)."""
+        """Takes a tenant and an inquiry id. It may take the inquiry too."""
         tenant, started = args["tenant"], workflow.now()
         doc = await self._activity("open_case", args)
         facts: dict = {}
@@ -53,16 +53,16 @@ class InquiryWorkflow:
             step_start = workflow.now()
             try:
                 kernel.check_step(facts, node, self.done)
-                res = await self._activity("run_step", {"tenant": tenant, "doc": doc, "node": node})
-                doc = res["doc"]
-                if "escalated" in res:
-                    out = res["escalated"]
+                result = await self._activity("run_step", {"tenant": tenant, "doc": doc, "node": node})
+                doc = result["doc"]
+                if "escalated" in result:
+                    out = result["escalated"]
                     break
-                decision = kernel.advance(facts, self.done, node, res["out"])
-            except kernel.KernelViolation as e:
-                out = kernel.escalation(e)
+                decision = kernel.advance(facts, self.done, node, result["out"])
+            except kernel.KernelViolation as error:
+                out = kernel.escalation(error)
                 break
-            trace.append({"node": node, "ms": (workflow.now() - step_start).total_seconds() * 1000, **res["out"]})
+            trace.append({"node": node, "ms": (workflow.now() - step_start).total_seconds() * 1000, **result["out"]})
             if decision:
                 out = {"decision": decision, "facts": facts, "trace": trace}
                 break
@@ -75,18 +75,18 @@ class InquiryWorkflow:
         return doc
 
     async def _hand_to_reviewers(self, tenant: str, case_id: str, sla_seconds: float | None) -> None:
-        """The case outlives this workflow: a reviewer may take days, so a child waits for them (ADR 0017)."""
+        """The case outlives this workflow. A reviewer may take days, so a child waits for them (ADR 0017)."""
         try:
             await workflow.start_child_workflow(
                 ReviewWorkflow.run, {"tenant": tenant, "case_id": case_id, "sla_seconds": sla_seconds},
                 id=review_id(tenant, case_id), parent_close_policy=ParentClosePolicy.ABANDON)
         except WorkflowAlreadyStartedError:
-            pass  # the earlier wait is still open and reads the case as it is now
+            pass  # The earlier wait is still open and reads the case as it is now.
 
 
 @workflow.defn
 class ReviewWorkflow:
-    """Waits for a human decision on one case. It escalates at the SLA and never decides anything itself."""
+    """Waits for a person to decide one case. It escalates at the deadline and never decides itself."""
 
     def __init__(self) -> None:
         self.closed = False
@@ -99,32 +99,38 @@ class ReviewWorkflow:
 
     @workflow.update
     async def decide(self, args: dict) -> dict:
-        """args: tenant, case_id, user, action (approve or reject), note, signature. Cedar decides inside the activity."""
+        """Takes the tenant, case, user, action, note and sign off. Cedar decides in the task."""
         async with self.lock:
-            res = await workflow.execute_activity("decide_case", args, start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
-            if "doc" in res:
-                self.closed = res["doc"]["status"] in CLOSED
-            return res
+            result = await workflow.execute_activity("decide_case", args, start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
+            if "doc" in result:
+                self.closed = result["doc"]["status"] in CLOSED
+            return result
+
+    def _is_closed(self) -> bool:
+        return self.closed
 
     @workflow.run
     async def run(self, args: dict) -> dict:
-        """args: tenant, case_id, and optionally sla_seconds."""
-        sla = timedelta(seconds=args["sla_seconds"]) if args.get("sla_seconds") else REVIEW_SLA
+        """Takes the tenant, the case id and maybe the deadline in seconds."""
+        sla = REVIEW_SLA
+        if args.get("sla_seconds"):
+            sla = timedelta(seconds=args["sla_seconds"])
         try:
-            await workflow.wait_condition(lambda: self.closed, timeout=sla)
+            await workflow.wait_condition(self._is_closed, timeout=sla)
         except asyncio.TimeoutError:
             self.escalated = True
             await workflow.execute_activity("escalate_case", {**args, "sla_seconds": sla.total_seconds()},
                                             start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
-            await workflow.wait_condition(lambda: self.closed)
+            await workflow.wait_condition(self._is_closed)
         await workflow.wait_condition(workflow.all_handlers_finished)
         return {"case": args["case_id"], "escalated": self.escalated}
 
 
 @workflow.defn
 class ContentStewardWorkflow:
-    """Always on, one per platform: nothing goes out on stale content. It wakes every few seconds, hands the
-    withdrawn-content events to the steward activity, and rolls its history over with continue-as-new."""
+    """Always on, one per platform, so nothing goes out on old content.
+    It wakes often and passes pulled content to the steward task.
+    Then it restarts its history with continue as new."""
 
     def __init__(self) -> None:
         self.invalidated = 0
@@ -144,7 +150,7 @@ class ContentStewardWorkflow:
 
 @workflow.defn
 class BatchImportWorkflow:
-    """The nightly import for one tenant. A Temporal schedule starts it; the activity reads what each channel dropped in S3."""
+    """The nightly import for one tenant. A Temporal schedule starts it. The activity reads what each channel left in S3."""
 
     @workflow.run
     async def run(self, args: dict) -> dict:

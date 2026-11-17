@@ -1,7 +1,7 @@
-"""A per-user request budget for the machine interfaces (/v1 and /mcp), counted in Valkey (ADR 0028).
+"""Each user gets a budget of requests for /v1 and /mcp. Valkey keeps the count (ADR 0028).
 
-Fixed one-minute windows keyed by tenant and user, so one noisy client cannot starve another tenant.
-If Valkey is down the limit is not enforced: an outage must not lock reviewers out of safety cases.
+Each window lasts one minute. It is keyed by tenant and user, so one noisy client cannot starve another.
+If Valkey is down, the limit is off. An outage must not lock reviewers out of safety cases.
 """
 
 import os
@@ -14,14 +14,16 @@ WINDOW_S = 60
 
 
 def hit(tenant: str, user: str) -> int | None:
-    """Count one request. Returns the seconds to wait when the user is over the limit, else None."""
+    """Count one request. Return the seconds to wait when the user is over the limit, else None."""
     now = int(time.time())
     key = f"rl:{tenant}:{user}:{now // WINDOW_S}"
     try:
         client = cache._client()
-        n = client.incr(key)
-        if n == 1:
+        count = client.incr(key)
+        if count == 1:
             client.expire(key, WINDOW_S)
     except cache.DOWN:
         return None
-    return WINDOW_S - now % WINDOW_S if n > LIMIT else None
+    if count > LIMIT:
+        return WINDOW_S - now % WINDOW_S
+    return None

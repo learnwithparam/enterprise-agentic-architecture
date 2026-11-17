@@ -1,23 +1,23 @@
-"""Tool-call guards, written as pure functions so tests call them directly. agents.py wraps them as
-Agent SDK PreToolUse and PostToolUse hooks; replay runs recorded tool calls through the same ones."""
+"""Tool-call guards are plain functions, so tests can call them directly.
+The agents module wraps them as hooks. Replay runs recorded calls through the same ones."""
 
 from collections.abc import Callable
 
 ALLOWED_TOOLS = {"mcp__mi__search_approved_content", "mcp__mi__get_block"}
 
-# authorize(agent, tool, tool_country, tool_product, case) -> (allowed, reason)
+# Each call gets the agent, tool, country, product and case. It returns yes or no, and a reason.
 Authorize = Callable[[str, str, str, str, dict], tuple[bool, str]]
 
 
 def pre_tool(agent: str, tool: str, tool_input: dict, case: dict, store: dict, authorize: Authorize) -> tuple[bool, str]:
-    """Allow a tool call only if the tool is on the list and it targets the case's country and product."""
+    """Allow a tool call only when the tool is listed and fits the case country and product."""
     if tool not in ALLOWED_TOOLS:
         return False, f"{tool} is not on the allowlist"
     if tool == "mcp__mi__get_block":
-        b = store.get(tool_input.get("block_id", ""))
-        if b is None:
+        block = store.get(tool_input.get("block_id", ""))
+        if block is None:
             return False, f"Block {tool_input.get('block_id')} does not exist"
-        country, product = b["country"], b["product"]
+        country, product = block["country"], block["product"]
         if country == "ALL" and product == "ALL":
             return True, "Template block"
     else:

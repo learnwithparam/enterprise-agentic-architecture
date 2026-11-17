@@ -5,7 +5,7 @@ from hcpagents.aws import floci_up
 
 
 def pytest_collection_modifyitems(config, items):
-    if floci_up() and db.up():
+    if floci_up() and db.is_up():
         return
     skip = pytest.mark.skip(reason="Floci or Postgres is not running: make up")
     for item in items:

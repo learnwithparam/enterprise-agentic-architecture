@@ -1,6 +1,8 @@
-"""Operational signals: CloudWatch metrics per route, latency and model cost, and one structured
-log line per case. The per-case trace (spans with inputs, outputs and token use) lives on the case
-record in the shape Langfuse ingests, so production can ship it there unchanged."""
+"""Signals for the platform. CloudWatch gets metrics for each route, the delay and the model cost.
+
+Each case also gets one log line. The trace of a case lives on its record.
+It holds steps with inputs, outputs and token use, in the shape Langfuse reads. Production can send it there as it is.
+"""
 
 import json
 import time
@@ -30,11 +32,11 @@ def log(case: dict) -> None:
 
 def route_counts() -> dict[str, float]:
     """Sum of CasesRouted by route over the last day."""
-    cw, out = client("cloudwatch"), {}
+    watch, out = client("cloudwatch"), {}
     now = time.time()
-    for m in cw.list_metrics(Namespace=NAMESPACE, MetricName="CasesRouted")["Metrics"]:
-        route = next(d["Value"] for d in m["Dimensions"] if d["Name"] == "Route")
-        pts = cw.get_metric_statistics(Namespace=NAMESPACE, MetricName="CasesRouted", Dimensions=m["Dimensions"],
+    for metric in watch.list_metrics(Namespace=NAMESPACE, MetricName="CasesRouted")["Metrics"]:
+        route = next(found["Value"] for found in metric["Dimensions"] if found["Name"] == "Route")
+        points = watch.get_metric_statistics(Namespace=NAMESPACE, MetricName="CasesRouted", Dimensions=metric["Dimensions"],
                                        StartTime=now - 86400, EndTime=now + 60, Period=86400, Statistics=["Sum"])["Datapoints"]
-        out[route] = out.get(route, 0) + sum(p["Sum"] for p in pts)
+        out[route] = out.get(route, 0) + sum(point["Sum"] for point in points)
     return out

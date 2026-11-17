@@ -1,4 +1,4 @@
-"""Guard tool calls with Cedar: two independent checks stand between an agent and another country's content."""
+"""Guard tool calls with Cedar. Two separate checks stand between an agent and the content of another country."""
 
 import pytest
 
@@ -6,7 +6,7 @@ from hcpagents import authz, guards, infra, world
 
 pytestmark = pytest.mark.floci
 
-STORE = {b["id"]: b for b in world.blocks()}
+STORE = {block["id"]: block for block in world.blocks()}
 CASE = {"id": "lab-cedar", "country": "DE", "product": "VEL"}
 SEARCH = "mcp__mi__search_approved_content"
 
@@ -29,5 +29,10 @@ def test_cedar_refuses_another_country_even_if_the_code_guard_were_bypassed():
 
 def test_a_tool_off_the_allowlist_never_reaches_the_policy_store():
     asked = []
-    ok, _ = guards.pre_tool("assembler", "Bash", {"command": "env"}, CASE, STORE, lambda *a: asked.append(a) or (True, ""))
+
+    def policy_that_allows(*arguments):
+        asked.append(arguments)
+        return True, ""
+
+    ok, _ = guards.pre_tool("assembler", "Bash", {"command": "env"}, CASE, STORE, policy_that_allows)
     assert not ok and not asked

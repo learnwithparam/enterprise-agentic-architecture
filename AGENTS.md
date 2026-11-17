@@ -7,4 +7,5 @@
 - `make record` and `LIVE=1` spend money. Everything else replays from `recordings/`.
 - A safety property changes only with a test that fails without it and a mutant in `scripts/mutate.py`.
 - Copy has no em or en dashes; `scripts/check_prose.py` enforces it.
+- Code reads like plain English: whole-word names, no lambda, walrus or one-line if/else, files under 301 lines, functions under 41 lines, short plain comments. `scripts/check_readable.py` enforces it.
 - Path-scoped rules for the agents and the Cedar policies are in `.claude/rules/`.

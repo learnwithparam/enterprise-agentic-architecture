@@ -1,9 +1,8 @@
-"""Assemble a reply from approved blocks and prove every sentence came from one.
+"""Assemble a reply from approved blocks and prove each sentence came from one.
 
-The model never writes medical text. It picks block ids; compose() places those blocks verbatim
-between the fixed templates, the safety information and the AI disclosure. verify() then checks
-the rendered text sentence by sentence against the content store as it is right now, so a block
-withdrawn after drafting fails the check at send time.
+The model never writes medical text. It picks block ids. The compose function places those blocks word for word
+between the fixed templates, the safety information and the AI note. The verify function then checks the final text
+one sentence at a time against the content store as it is now. So a block withdrawn after drafting fails the check at send time.
 """
 
 import re
@@ -14,7 +13,7 @@ SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
 
 def sentences(text: str) -> list[str]:
-    return [s.strip() for s in SENTENCE.split(text.strip()) if s.strip()]
+    return [piece.strip() for piece in SENTENCE.split(text.strip()) if piece.strip()]
 
 
 def required_ids(product: str, country_code: str) -> list[str]:
@@ -22,13 +21,14 @@ def required_ids(product: str, country_code: str) -> list[str]:
 
 
 def compose(product: str, country_code: str, answer_ids: list[str], store: dict[str, dict]) -> list[dict]:
-    """Ordered reply segments: opening, the chosen blocks, safety information, disclosure, closing."""
+    """The reply in order. It has an opening, the chosen blocks, safety facts, a note and a close."""
     opening, isi, disclosure, closing = required_ids(product, country_code)
     order = [opening, *dict.fromkeys(answer_ids), isi, disclosure, closing]
     return [
-        {"block_id": b, "version": store[b]["version"], "text": store[b]["text"], "role": _role(b, answer_ids)}
-        for b in order
-        if b in store
+        {"block_id": block_id, "version": store[block_id]["version"], "text": store[block_id]["text"],
+         "role": _role(block_id, answer_ids)}
+        for block_id in order
+        if block_id in store
     ]
 
 
@@ -43,44 +43,59 @@ def _role(block_id: str, answer_ids: list[str]) -> str:
 
 
 def render(segments: list[dict]) -> str:
-    return " ".join(s["text"] for s in segments)
+    return " ".join(segment["text"] for segment in segments)
+
+
+def _evidence(sentence: str, sources: list[dict], today) -> tuple[dict, str | None]:
+    """The evidence row for one sentence, and the problem text if it is not grounded."""
+    live = [block for block in sources if is_current(block, today)]
+    if live:
+        block = live[0]
+        return {"sentence": sentence, "ok": True, "block_id": block["id"], "version": block["version"],
+                "mlr_ref": block["mlr_ref"]}, None
+    if sources:
+        reason = why_not_current(sources[0], today)
+        block_id = sources[0]["id"]
+    else:
+        reason = "not found in any approved block for this product and country"
+        block_id = None
+    return {"sentence": sentence, "ok": False, "block_id": block_id, "reason": reason}, f"Ungrounded sentence: {reason}"
+
+
+def _segment_problems(segments: list[dict], product: str, country_code: str, store: dict[str, dict], today) -> list[str]:
+    problems = []
+    used = {segment["block_id"] for segment in segments}
+    for required_id in required_ids(product, country_code):
+        if required_id not in used:
+            problems.append(f"Required block {required_id} is missing")
+    for segment in segments:
+        block = store.get(segment["block_id"])
+        if block is None:
+            problems.append(f"{segment['block_id']} does not exist")
+        elif block["version"] != segment["version"]:
+            problems.append(f"{segment['block_id']} changed from v{segment['version']} to v{block['version']} after drafting")
+        elif not is_current(block, today):
+            problems.append(why_not_current(block, today))
+    return problems
 
 
 def verify(segments: list[dict], product: str, country_code: str, store: dict[str, dict], today=TODAY) -> dict:
-    """Check the reply against the store. Returns per-sentence evidence and the list of problems."""
+    """Check the reply against the store. Gives back evidence for each sentence and the list of problems."""
     allowed = [
-        b for b in store.values()
-        if b["country"] in (country_code, "ALL") and b["product"] in (product, "ALL")
+        block for block in store.values()
+        if block["country"] in (country_code, "ALL") and block["product"] in (product, "ALL")
     ]
     index: dict[str, list[dict]] = {}
-    for b in allowed:
-        for s in sentences(b["text"]):
-            index.setdefault(s, []).append(b)
+    for block in allowed:
+        for sentence in sentences(block["text"]):
+            index.setdefault(sentence, []).append(block)
 
     problems: list[str] = []
     evidence = []
-    for s in sentences(render(segments)):
-        sources = index.get(s, [])
-        live = [b for b in sources if is_current(b, today)]
-        if live:
-            b = live[0]
-            evidence.append({"sentence": s, "ok": True, "block_id": b["id"], "version": b["version"], "mlr_ref": b["mlr_ref"]})
-        else:
-            reason = why_not_current(sources[0], today) if sources else "not found in any approved block for this product and country"
-            evidence.append({"sentence": s, "ok": False, "block_id": sources[0]["id"] if sources else None, "reason": reason})
-            problems.append(f"Ungrounded sentence: {reason}")
-
-    used = {seg["block_id"] for seg in segments}
-    for rid in required_ids(product, country_code):
-        if rid not in used:
-            problems.append(f"Required block {rid} is missing")
-    for seg in segments:
-        b = store.get(seg["block_id"])
-        if b is None:
-            problems.append(f"{seg['block_id']} does not exist")
-        elif b["version"] != seg["version"]:
-            problems.append(f"{seg['block_id']} changed from v{seg['version']} to v{b['version']} after drafting")
-        elif not is_current(b, today):
-            problems.append(why_not_current(b, today))
-
+    for sentence in sentences(render(segments)):
+        row, problem = _evidence(sentence, index.get(sentence, []), today)
+        evidence.append(row)
+        if problem:
+            problems.append(problem)
+    problems += _segment_problems(segments, product, country_code, store, today)
     return {"grounded": not problems, "sentences": evidence, "problems": list(dict.fromkeys(problems))}

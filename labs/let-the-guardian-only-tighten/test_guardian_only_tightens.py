@@ -1,4 +1,4 @@
-"""Let the guardian only tighten: it can switch a country off, never on, and the improver only proposes."""
+"""Let the guardian only tighten. It can switch a country off, never on. The improver only makes suggestions."""
 
 from datetime import UTC, datetime
 
@@ -10,13 +10,13 @@ pytestmark = pytest.mark.floci
 
 
 def review(country: str, approved: int, rejected: int) -> None:
-    """Seed reviewed AI drafts the way approve and reject leave them: a case with a draft, and a ledger entry."""
-    for kind, n in (("approved", approved), ("rejected", rejected)):
-        for i in range(n):
-            cid = f"lab-{country}-{kind}-{i}-{datetime.now(UTC).timestamp()}"
-            store.put("mi-cases", {"id": cid, "country": country, "product": "p", "draft": {"segments": []},
+    """Seed reviewed AI drafts the way approve and reject leave them. Each has a case with a draft and a ledger entry."""
+    for kind, count in (("approved", approved), ("rejected", rejected)):
+        for i in range(count):
+            case_id = f"lab-{country}-{kind}-{i}-{datetime.now(UTC).timestamp()}"
+            store.put("mi-cases", {"id": case_id, "country": country, "product": "p", "draft": {"segments": []},
                                    "questions": [{"topic": "dosing"}]})
-            ledger.append({"case": cid, "type": kind})
+            ledger.append({"case": case_id, "type": kind})
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +27,7 @@ def fresh():
 def test_reviewers_who_reject_too_much_switch_a_country_off():
     start = datetime.now(UTC)
     review("DE", approved=2, rejected=4)
-    assert [c["country"] for c in guardian.patrol(start)] == ["DE"]
+    assert [lowered["country"] for lowered in guardian.patrol(start)] == ["DE"]
     assert not cases.autonomy_setting("DE")["enabled"] and cases.autonomy_setting("US")["enabled"]
 
 

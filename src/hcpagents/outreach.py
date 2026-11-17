@@ -1,41 +1,61 @@
-"""The outreach coordinator: the right next contact for each doctor, with no overlap (ADR 0023).
+"""Outreach picks the next contact for each doctor. No two contacts overlap (ADR 0023).
 
-It reads HCP 360 and decides for every planned touch whether it may be proposed to a human. It acts alone
-only to hold a touch, never to send one: `propose` means a rep or marketer still has to approve. Every
-reason is traced to the rule that fired and the case or touch behind it, and each hold is written to the
-ledger so Compliance can see why a doctor was not contacted.
+It reads HCP 360. For each planned touch it decides if a human may be asked to approve it.
+It acts alone only to hold a touch, never to send one. A propose result means a rep or marketer still has to approve.
+
+Each reason names the rule that fired and the case or touch behind it. Each hold is written to the ledger.
+So Compliance can see why a doctor was not contacted.
 """
 
 from hcpagents import hcp360, ledger, store, supervisor
 
 
+def _held_reasons(view: dict) -> dict:
+    held = {}
+    for planned in view["planned"]:
+        decision = planned["decision"]
+        if decision["go"]:
+            continue
+        held[planned["id"]] = [_reason(rule, why, view["open_cases"], view["freezes"])
+                               for rule, why in zip(decision["rules"], decision["reasons"], strict=True)]
+    return held
+
+
 def coordinate(hcp_id: str) -> list[dict]:
-    """One decision per planned touch, oldest first: {id, action: propose|hold, reasons: [{rule, why, source}]}."""
+    """One decision for each planned touch, oldest first. Each has an id, an action (propose or hold) and a list of reasons."""
     view = hcp360.view(hcp_id)
-    cases = view["open_cases"]
-    held = {p["id"]: [_reason(rule, why, cases, view["freezes"]) for rule, why in zip(p["decision"]["rules"], p["decision"]["reasons"], strict=True)]
-            for p in view["planned"] if not p["decision"]["go"]}
-    clear = [p for p in view["planned"] if p["decision"]["go"]]
+    held = _held_reasons(view)
+    clear = [planned for planned in view["planned"] if planned["decision"]["go"]]
     for loser, winner in supervisor.arbitrate(clear).items():
-        held[loser] = [{"rule": "overlap", "why": f"Yields to {winner}, planned within {supervisor.OVERLAP_DAYS} days", "source": winner}]
-    return [{"id": p["id"], "on": p["on"], "action": "hold" if p["id"] in held else "propose",
-             "reasons": held.get(p["id"], [])} for p in view["planned"]]
+        held[loser] = [{"rule": "overlap", "why": f"Yields to {winner}, planned within {supervisor.OVERLAP_DAYS} days",
+                        "source": winner}]
+    decisions = []
+    for planned in view["planned"]:
+        action = "propose"
+        if planned["id"] in held:
+            action = "hold"
+        decisions.append({"id": planned["id"], "on": planned["on"], "action": action,
+                          "reasons": held.get(planned["id"], [])})
+    return decisions
 
 
 def _reason(rule: str, why: str, cases: list[dict], freezes: list[dict]) -> dict:
-    source = (cases[0]["id"] if rule == "open_medical_case" and cases
-              else freezes[0]["interaction"] if rule == "safety_freeze" and freezes else None)
+    source = None
+    if rule == "open_medical_case" and cases:
+        source = cases[0]["id"]
+    elif rule == "safety_freeze" and freezes:
+        source = freezes[0]["interaction"]
     return {"rule": rule, "why": why, "source": source}
 
 
 def run(hcp_id: str) -> list[dict]:
-    """Coordinate, store the decision on the touch, and ledger every hold."""
+    """Coordinate, store the decision on the touch, and ledger each hold."""
     decisions = coordinate(hcp_id)
-    for d in decisions:
-        touch = store.get("mi-touches", d["id"])
-        if touch.get("coordinator") != d["action"]:
-            store.put("mi-touches", touch | {"coordinator": d["action"], "reasons": d["reasons"]})
-            if d["action"] == "hold":
-                ledger.append({"type": "outreach_hold", "agent": "outreach-coordinator", "touch": d["id"],
-                               "hcp": hcp_id, "rules": [r["rule"] for r in d["reasons"]]})
+    for decision in decisions:
+        touch = store.get("mi-touches", decision["id"])
+        if touch.get("coordinator") != decision["action"]:
+            store.put("mi-touches", touch | {"coordinator": decision["action"], "reasons": decision["reasons"]})
+            if decision["action"] == "hold":
+                ledger.append({"type": "outreach_hold", "agent": "outreach-coordinator", "touch": decision["id"],
+                               "hcp": hcp_id, "rules": [reason["rule"] for reason in decision["reasons"]]})
     return decisions

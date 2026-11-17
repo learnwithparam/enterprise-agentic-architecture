@@ -1,9 +1,9 @@
-"""The policy kernel: what no agent's plan may do, whatever it plans (ADR 0013).
+"""The kernel holds what no agent plan may do (ADR 0013).
 
-Agents choose how to do a step. The kernel owns which steps exist, their order, which facts each may
-set, and the route those facts imply (graph.ROUTING). It checks every step before it runs and every
-route before it is returned, so a plan that skips the safety screen, reopens a decided case or rewrites
-an adverse-event fact is refused rather than trusted.
+Agents choose how to do a step. The kernel owns which steps exist and their order.
+It also owns which facts each step may set, and the route those facts imply.
+It checks every step before it runs and every route before it is returned.
+So a plan that skips the safety screen or reopens a decided case is refused, not trusted.
 """
 
 import time
@@ -17,11 +17,11 @@ PRODUCES = dict(graph.NODES)
 
 
 class KernelViolation(Exception):
-    """A plan tried something the kernel does not allow. The case fails closed to a human."""
+    """A plan tried something the kernel does not allow. The case goes to a person."""
 
 
 def check_step(facts: dict, node: str, done: list[str]) -> None:
-    """May `node` run now? Only the next step in order, and only while no route has been decided."""
+    """May this step run now? Only the next step in order, and only while no route is set."""
     decided = graph.decide(facts)
     if decided:
         raise KernelViolation(f"{node}: the case is already routed to {decided['route']}; no further step may run")
@@ -32,20 +32,20 @@ def check_step(facts: dict, node: str, done: list[str]) -> None:
 
 
 def check_facts(node: str, facts: dict) -> None:
-    """A step may set exactly the facts it is declared to produce, so a late step cannot rewrite an earlier one."""
+    """A step may set exactly the facts it is meant to make. A late step cannot rewrite an early one."""
     allowed = set(PRODUCES[node])
     if set(facts) != allowed:
         raise KernelViolation(f"{node} must set exactly {sorted(allowed)}, not {sorted(facts)}")
 
 
 def check_attempt(attempt: int, limit: int) -> None:
-    """A plan's loop is bounded: attempt `limit` is the last one."""
+    """A plan loop has a limit. The last attempt is the limit."""
     if attempt > limit:
         raise KernelViolation(f"attempt {attempt} is over the limit of {limit}")
 
 
 def check_route(facts: dict, route: str) -> dict:
-    """The route the facts imply, or a violation if `route` is anything else."""
+    """Return the route the facts imply. Any other route is a violation."""
     decided = graph.decide(facts)
     if decided is None:
         raise KernelViolation(f"no route can be chosen yet; facts known: {sorted(facts)}")
@@ -54,14 +54,16 @@ def check_route(facts: dict, route: str) -> dict:
     return decided
 
 
-def escalation(e: Exception) -> dict:
-    """No model is left to try, or a plan broke the kernel, so a human decides. Fail closed: nothing is drafted or sent."""
-    rule = "kernel_violation" if isinstance(e, KernelViolation) else "router_escalated"
-    return {"decision": {"route": "review", "rule": rule, "why": str(e)}, "facts": {}, "trace": []}
+def escalation(error: Exception) -> dict:
+    """No model is left, or a plan broke the kernel, so a person decides. Nothing is drafted or sent."""
+    rule = "router_escalated"
+    if isinstance(error, KernelViolation):
+        rule = "kernel_violation"
+    return {"decision": {"route": "review", "rule": rule, "why": str(error)}, "facts": {}, "trace": []}
 
 
 def advance(facts: dict, done: list[str], node: str, out: dict) -> dict | None:
-    """Record a finished step. Returns the decision once the facts imply a route, else None."""
+    """Record a finished step. Return the decision once the facts imply a route, else None."""
     check_facts(node, out["facts"])
     facts.update(out["facts"])
     done.append(node)
@@ -71,16 +73,16 @@ def advance(facts: dict, done: list[str], node: str, out: dict) -> dict | None:
     return decision
 
 
-async def run(impls: dict[str, Node], ctx: dict) -> dict:
-    """Run steps in order until a route is decided. Each step returns {"facts": {...}, ...detail}."""
+async def run(impls: dict[str, Node], context: dict) -> dict:
+    """Run steps in order until a route is set. Each step returns its facts and some detail."""
     facts: dict = {}
     trace: list[dict] = []
     done: list[str] = []
     for name in ORDER:
         check_step(facts, name, done)
         start = time.perf_counter()
-        out = await impls[name](ctx)
-        ctx.setdefault("facts", {}).update(out["facts"])
+        out = await impls[name](context)
+        context.setdefault("facts", {}).update(out["facts"])
         decision = advance(facts, done, name, out)
         trace.append({"node": name, "ms": round((time.perf_counter() - start) * 1000, 1), **out})
         if decision:

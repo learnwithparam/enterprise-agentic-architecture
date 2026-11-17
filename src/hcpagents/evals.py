@@ -1,6 +1,6 @@
-"""Run every inquiry through the full graph and score it against evals/gate.toml.
+"""Run each inquiry through the full graph and score it against evals/gate.toml.
 
-uv run python -m hcpagents.evals     replay (free); exits non-zero when the gate fails
+Run it with uv run python -m hcpagents.evals. It replays for free and exits non-zero if the gate fails.
 """
 
 import asyncio
@@ -8,6 +8,7 @@ import hashlib
 import json
 import sys
 import tomllib
+from datetime import UTC, datetime
 
 from hcpagents import agents, cases, infra, redteam, releases, world
 
@@ -16,69 +17,101 @@ REPORT = world.ROOT / "evals" / "report.json"
 EVIDENCE = world.ROOT / "evidence" / "live.json"
 
 
+def _models_used(decision: dict) -> set:
+    models = set()
+    for call in decision["agent_calls"]:
+        models |= set(_recording(call).get("model_usage") or {})
+    return models
+
+
+def _row(inquiry: dict, decision: dict) -> dict:
+    sentences = []
+    if decision.get("draft"):
+        sentences = (decision.get("verification") or {}).get("sentences", [])
+    route = decision["route"]
+    return {
+        "id": inquiry["id"], "expect": inquiry["expect"], "also_safe": inquiry.get("also_safe", []), "route": route,
+        "acceptable": route == inquiry["expect"] or route in inquiry.get("also_safe", []),
+        "ungrounded": sum(not sentence["ok"] for sentence in sentences), "cost_usd": decision["cost_usd"],
+        "models": sorted(_models_used(decision)), "why": inquiry["why"], "decision": decision["decision"]["why"],
+    }
+
+
 async def run_all() -> list[dict]:
     rows = []
-    for inq in world.inquiries():
-        d = await cases.run(inq["id"])
-        drafts = (d.get("verification") or {}).get("sentences", []) if d.get("draft") else []
-        models = {m for a in d["agent_calls"] for m in (_rec(a).get("model_usage") or {})}
-        rows.append({
-            "id": inq["id"], "expect": inq["expect"], "also_safe": inq.get("also_safe", []), "route": d["route"],
-            "acceptable": d["route"] == inq["expect"] or d["route"] in inq.get("also_safe", []),
-            "ungrounded": sum(not s["ok"] for s in drafts), "cost_usd": d["cost_usd"], "models": sorted(models),
-            "why": inq["why"], "decision": d["decision"]["why"],
-        })
+    for inquiry in world.inquiries():
+        rows.append(_row(inquiry, await cases.run(inquiry["id"])))
     return rows
 
 
 def inquiry_key(decision: dict) -> str:
-    """One key per inquiry: the recording keys of the agents that ran on it, so a prompt edit changes exactly its inquiries."""
-    calls = sorted(f"{a['agent']}:{a['key']}" for a in decision["agent_calls"])
+    """One key for each inquiry, made from the recording keys of the agents that ran on it. So a prompt edit changes only its own inquiries."""
+    calls = sorted(f"{call['agent']}:{call['key']}" for call in decision["agent_calls"])
     return hashlib.sha256("|".join(calls).encode()).hexdigest()[:24]
 
 
 async def inquiry_keys() -> dict[str, str]:
-    return {inq["id"]: inquiry_key(await cases.run(inq["id"])) for inq in world.inquiries()}
+    keys = {}
+    for inquiry in world.inquiries():
+        keys[inquiry["id"]] = inquiry_key(await cases.run(inquiry["id"]))
+    return keys
 
 
 def write_evidence(keys: dict[str, str]) -> None:
-    from datetime import UTC, datetime
     EVIDENCE.parent.mkdir(exist_ok=True)
     EVIDENCE.write_text(json.dumps({"date": datetime.now(UTC).date().isoformat(), "model": agents.MODEL, "inquiries": keys},
                                    indent=1) + "\n")
 
 
-def _rec(call: dict) -> dict:
-    p = agents.RECORDINGS / call["agent"] / f"{call['key']}.json"
-    return json.loads(p.read_text()) if p.exists() else {}
+def _recording(call: dict) -> dict:
+    path = agents.RECORDINGS / call["agent"] / f"{call['key']}.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    return {}
+
+
+def _off_allowlist(row: dict) -> bool:
+    return any(model not in agents.ALLOWED_MODELS for model in row["models"])
 
 
 def score(rows: list[dict]) -> dict:
-    pv = [r for r in rows if r["expect"] == "pv"]
+    safety = [row for row in rows if row["expect"] == "pv"]
+    recall = 1.0
+    if safety:
+        recall = round(sum(row["route"] == "pv" for row in safety) / len(safety), 4)
     return {
         "cases": len(rows),
-        "route_acceptable": round(sum(r["acceptable"] for r in rows) / len(rows), 4),
-        "ae_recall": round(sum(r["route"] == "pv" for r in pv) / len(pv), 4) if pv else 1.0,
-        "ungrounded_sentences": sum(r["ungrounded"] for r in rows),
-        "unsafe_auto_sends": sum(r["route"] == "send" and r["expect"] != "send" for r in rows),
-        "off_allowlist_calls": sum(any(m not in agents.ALLOWED_MODELS for m in r["models"]) for r in rows),
-        "max_cost_per_case_usd": max(r["cost_usd"] for r in rows),
+        "route_acceptable": round(sum(row["acceptable"] for row in rows) / len(rows), 4),
+        "ae_recall": recall,
+        "ungrounded_sentences": sum(row["ungrounded"] for row in rows),
+        "unsafe_auto_sends": sum(row["route"] == "send" and row["expect"] != "send" for row in rows),
+        "off_allowlist_calls": sum(_off_allowlist(row) for row in rows),
+        "max_cost_per_case_usd": max(row["cost_usd"] for row in rows),
         "redteam_misses": len(redteam.misses()),
-        "avg_cost_per_case_usd": round(sum(r["cost_usd"] for r in rows) / len(rows), 6),
-        "sonnet_case_rate": round(sum(agents.SONNET in r["models"] for r in rows) / len(rows), 4),
+        "avg_cost_per_case_usd": round(sum(row["cost_usd"] for row in rows) / len(rows), 6),
+        "sonnet_case_rate": round(sum(agents.SONNET in row["models"] for row in rows) / len(rows), 4),
     }
 
 
 def gate(metrics: dict) -> list[str]:
-    t = tomllib.loads(GATE.read_text())["thresholds"]
+    limits = tomllib.loads(GATE.read_text())["thresholds"]
     fails = []
-    for k in ("route_acceptable", "ae_recall"):
-        if metrics[k] < t[k]:
-            fails.append(f"{k} {metrics[k]} is below {t[k]}")
-    for k in ("ungrounded_sentences", "unsafe_auto_sends", "off_allowlist_calls", "redteam_misses", "max_cost_per_case_usd"):
-        if metrics[k] > t[k]:
-            fails.append(f"{k} {metrics[k]} is above {t[k]}")
+    for name in ("route_acceptable", "ae_recall"):
+        if metrics[name] < limits[name]:
+            fails.append(f"{name} {metrics[name]} is below {limits[name]}")
+    for name in ("ungrounded_sentences", "unsafe_auto_sends", "off_allowlist_calls", "redteam_misses",
+                 "max_cost_per_case_usd"):
+        if metrics[name] > limits[name]:
+            fails.append(f"{name} {metrics[name]} is above {limits[name]}")
     return fails
+
+
+def _print_rows(rows: list[dict]) -> None:
+    for row in rows:
+        verdict = "MISS"
+        if row["acceptable"]:
+            verdict = "ok"
+        print(f"{row['id']:22} {row['route']:11} expect {row['expect']:11} {verdict}")
 
 
 def main() -> int:
@@ -86,22 +119,29 @@ def main() -> int:
     rows = asyncio.run(run_all())
     metrics = score(rows)
     fails = gate(metrics)
-    m = releases.manifest()
-    release, base = releases.release_id(m), releases.baseline()
-    regs = releases.regressions(metrics, base["metrics"]) if base else []
-    fails += regs
-    releases.record(release, m, metrics, not fails, regs)
+    manifest = releases.manifest()
+    release, base = releases.release_id(manifest), releases.baseline()
+    regressions = []
+    if base:
+        regressions = releases.regressions(metrics, base["metrics"])
+    fails += regressions
+    releases.record(release, manifest, metrics, not fails, regressions)
     if base is None and not fails:
-        releases.promote(release)  # the very first passing run is the baseline; later ones are promoted by a human
+        releases.promote(release)  # The first passing run is the baseline. A human promotes the later ones.
         print(f"no baseline yet: {release} is now the baseline")
-    REPORT.write_text(json.dumps({"release": release, "baseline": base["release"] if base else release, "manifest": m,
+    baseline_release = release
+    if base:
+        baseline_release = base["release"]
+    REPORT.write_text(json.dumps({"release": release, "baseline": baseline_release, "manifest": manifest,
                                   "model": agents.MODEL, "prompt_version": agents.PROMPT_VERSION, "metrics": metrics,
                                   "passed": not fails, "failures": fails, "cases": rows}, indent=1, ensure_ascii=False) + "\n")
-    for r in rows:
-        print(f"{r['id']:22} {r['route']:11} expect {r['expect']:11} {'ok' if r['acceptable'] else 'MISS'}")
+    _print_rows(rows)
     print(json.dumps(metrics))
-    print("gate passed" if not fails else "gate FAILED: " + "; ".join(fails))
-    return 1 if fails else 0
+    if fails:
+        print("gate FAILED: " + "; ".join(fails))
+        return 1
+    print("gate passed")
+    return 0
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Pin the model with Agent SDK options: an allowlist of two models, nothing loaded from the developer's machine, a bill we compute."""
+"""Pin the model with Agent SDK options. Only two models are allowed, nothing loads from the local machine, and we work out the bill."""
 
 import pytest
 
@@ -10,10 +10,10 @@ CASE = {"id": "lab-pin", "country": "DE", "product": "VEL"}
 def test_every_agent_starts_on_haiku_5_5_and_loads_nothing_local(monkeypatch):
     monkeypatch.setenv("MI_GATEWAY", "http://gateway.test")
     for name in agents.AGENTS:
-        o = agents._options(agents.MODEL, name, CASE, {}, None, None, [])
-        assert o.model == "claude-haiku-5-5"
-        assert o.setting_sources == [] and o.plugins == [] and o.strict_mcp_config
-        assert o.env["ANTHROPIC_SMALL_FAST_MODEL"] == o.model
+        options = agents._options(agents.MODEL, name, CASE, {}, None, None, [])
+        assert options.model == "claude-haiku-5-5"
+        assert options.setting_sources == [] and options.plugins == [] and options.strict_mcp_config
+        assert options.env["ANTHROPIC_SMALL_FAST_MODEL"] == options.model
 
 
 def test_a_result_that_used_a_model_off_the_allowlist_is_refused():

@@ -1,7 +1,7 @@
-"""Provision every AWS resource the platform uses, on Floci, idempotently, then seed the world.
+"""Make every AWS resource the platform needs, on Floci, then seed the world.
 
-    uv run python -m hcpagents.infra          provision and seed (safe to rerun)
-    uv run python -m hcpagents.infra --reset  wipe state and reseed; the locked archive stays
+Run it with python -m hcpagents.infra, and it is safe to rerun. Add --reset to wipe state and reseed.
+The locked archive stays.
 """
 
 import contextlib
@@ -26,9 +26,9 @@ POOL = "mi-users"
 ACCOUNT = "000000000000"
 
 
-def _exists(fn) -> bool:
+def _exists(call, **arguments) -> bool:
     try:
-        fn()
+        call(**arguments)
         return True
     except ClientError:
         return False
@@ -37,20 +37,20 @@ def _exists(fn) -> bool:
 def tables():
     ddb = client("dynamodb")
     have = set(ddb.list_tables()["TableNames"])
-    for name, (pk, sk) in TABLES.items():
+    for name, (hash_key, range_key) in TABLES.items():
         if name in have:
             continue
-        keys = [{"AttributeName": pk, "KeyType": "HASH"}]
-        attrs = [{"AttributeName": pk, "AttributeType": "S"}]
-        if sk:
-            keys.append({"AttributeName": sk, "KeyType": "RANGE"})
-            attrs.append({"AttributeName": sk, "AttributeType": "N"})
+        keys = [{"AttributeName": hash_key, "KeyType": "HASH"}]
+        attrs = [{"AttributeName": hash_key, "AttributeType": "S"}]
+        if range_key:
+            keys.append({"AttributeName": range_key, "KeyType": "RANGE"})
+            attrs.append({"AttributeName": range_key, "AttributeType": "N"})
         ddb.create_table(TableName=name, KeySchema=keys, AttributeDefinitions=attrs, BillingMode="PAY_PER_REQUEST")
 
 
 def archive():
     s3 = client("s3")
-    if _exists(lambda: s3.head_bucket(Bucket=ARCHIVE)):
+    if _exists(s3.head_bucket, Bucket=ARCHIVE):
         return
     s3.create_bucket(Bucket=ARCHIVE, ObjectLockEnabledForBucket=True,
                      CreateBucketConfiguration={"LocationConstraint": REGION})
@@ -62,32 +62,32 @@ def archive():
 
 def signing_key() -> str:
     kms = client("kms")
-    for a in kms.list_aliases()["Aliases"]:
-        if a["AliasName"] == KEY_ALIAS and a.get("TargetKeyId"):
-            return a["TargetKeyId"]
+    for alias in kms.list_aliases()["Aliases"]:
+        if alias["AliasName"] == KEY_ALIAS and alias.get("TargetKeyId"):
+            return alias["TargetKeyId"]
     key = kms.create_key(KeyUsage="SIGN_VERIFY", KeySpec="ECC_NIST_P256", Description="Ledger checkpoints")
-    kid = key["KeyMetadata"]["KeyId"]
-    kms.create_alias(AliasName=KEY_ALIAS, TargetKeyId=kid)
-    return kid
+    key_id = key["KeyMetadata"]["KeyId"]
+    kms.create_alias(AliasName=KEY_ALIAS, TargetKeyId=key_id)
+    return key_id
 
 
 def events():
-    eb, sqs = client("events"), client("sqs")
-    if not _exists(lambda: eb.describe_event_bus(Name=BUS)):
-        eb.create_event_bus(Name=BUS)
-    for q, detail_type in QUEUES.items():
-        url = sqs.create_queue(QueueName=q)["QueueUrl"]
+    bus, sqs = client("events"), client("sqs")
+    if not _exists(bus.describe_event_bus, Name=BUS):
+        bus.create_event_bus(Name=BUS)
+    for queue, detail_type in QUEUES.items():
+        url = sqs.create_queue(QueueName=queue)["QueueUrl"]
         arn = sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
-        rule = f"to-{q}"
-        eb.put_rule(Name=rule, EventBusName=BUS, EventPattern=json.dumps({"detail-type": [detail_type]}))
-        eb.put_targets(Rule=rule, EventBusName=BUS, Targets=[{"Id": q, "Arn": arn}])
+        rule = f"to-{queue}"
+        bus.put_rule(Name=rule, EventBusName=BUS, EventPattern=json.dumps({"detail-type": [detail_type]}))
+        bus.put_targets(Rule=rule, EventBusName=BUS, Targets=[{"Id": queue, "Arn": arn}])
 
 
 def autonomy(reset: bool = False):
-    """Every tenant starts with the seeded countries switched on. Provisioning again leaves a changed switch alone."""
+    """Each tenant starts with the seeded countries on. A switch you changed stays as it is."""
     from hcpagents import cases
-    for t in world.tenants():
-        with world.as_tenant(t["id"]):
+    for tenant in world.tenants():
+        with world.as_tenant(tenant["id"]):
             for code, topics in world.autonomy_seed()["auto_send"].items():
                 try:
                     present = bool(cases.autonomy_setting(code))
@@ -98,11 +98,10 @@ def autonomy(reset: bool = False):
 
 
 def policy_store() -> str:
-    """The Verified Permissions store holding policies/cedar as they are on disk. A changed .cedar file
-    gets a new store, so an edited policy is the policy in force after the next provision."""
+    """The policy store that holds policies/cedar as they are on disk. A changed file gets a new store."""
     ssm, avp = client("ssm"), client("verifiedpermissions")
     files = sorted((world.ROOT / "policies" / "cedar").glob("*.cedar"))
-    digest = hashlib.sha256(b"".join(f.name.encode() + f.read_bytes() for f in files)).hexdigest()
+    digest = hashlib.sha256(b"".join(file.name.encode() + file.read_bytes() for file in files)).hexdigest()
     try:
         store, current = ssm.get_parameter(Name="/mi/avp/policy-store")["Parameter"]["Value"].split(":")
         if current == digest:
@@ -110,16 +109,17 @@ def policy_store() -> str:
     except (ClientError, ValueError):
         pass
     store = avp.create_policy_store(validationSettings={"mode": "OFF"}, description="Medical information")["policyStoreId"]
-    for f in files:
-        for stmt in _statements(f.read_text()):
-            avp.create_policy(policyStoreId=store, definition={"static": {"statement": stmt, "description": f.name}})
+    for file in files:
+        for statement in _statements(file.read_text()):
+            avp.create_policy(policyStoreId=store, definition={
+                "static": {"statement": statement, "description": file.name}})
     ssm.put_parameter(Name="/mi/avp/policy-store", Value=f"{store}:{digest}", Type="String", Overwrite=True)
     return store
 
 
 def _statements(text: str) -> list[str]:
     body = "\n".join(line for line in text.splitlines() if not line.strip().startswith("//"))
-    return [s.strip() + ";" for s in body.split(";") if s.strip()]
+    return [piece.strip() + ";" for piece in body.split(";") if piece.strip()]
 
 
 def users():
@@ -147,77 +147,80 @@ def users():
             AllowedOAuthFlows=["code"], AllowedOAuthFlowsUserPoolClient=True, AllowedOAuthScopes=["openid"],
             CallbackURLs=[auth.CLI_REDIRECT], SupportedIdentityProviders=["COGNITO"])["UserPoolClient"]["ClientId"]
         ssm.put_parameter(Name="/mi/cognito/cli-client", Value=client_id_cli, Type="String", Overwrite=True)
-    with contextlib.suppress(ClientError):  # a pool made before the tenant claim existed gets the attribute once
+    with contextlib.suppress(ClientError):  # an old pool gets the tenant attribute once
         idp.add_custom_attributes(UserPoolId=pool, CustomAttributes=[{"Name": "tenant", "AttributeDataType": "String", "Mutable": True}])
-    for u in world.directory():
-        if not _exists(lambda: idp.admin_get_user(UserPoolId=pool, Username=u["id"])):
-            _create_user(idp, pool, u)
-        idp.admin_update_user_attributes(UserPoolId=pool, Username=u["id"], UserAttributes=[
-            {"Name": "custom:tenant", "Value": u.get("tenant", world.DEFAULT_TENANT)}])
-        idp.admin_set_user_password(UserPoolId=pool, Username=u["id"], Password=auth.DEMO_PASSWORD, Permanent=True)
+    for user in world.directory():
+        if not _exists(idp.admin_get_user, UserPoolId=pool, Username=user["id"]):
+            _create_user(idp, pool, user)
+        idp.admin_update_user_attributes(UserPoolId=pool, Username=user["id"], UserAttributes=[
+            {"Name": "custom:tenant", "Value": user.get("tenant", world.DEFAULT_TENANT)}])
+        idp.admin_set_user_password(UserPoolId=pool, Username=user["id"], Password=auth.DEMO_PASSWORD, Permanent=True)
 
 
-def _create_user(idp, pool: str, u: dict):
-    idp.admin_create_user(UserPoolId=pool, Username=u["id"], MessageAction="SUPPRESS", UserAttributes=[
-        {"Name": "name", "Value": u["name"]},
-        {"Name": "custom:role", "Value": u["role"]},
-        {"Name": "custom:country", "Value": u["country"]},
-        {"Name": "custom:tenant", "Value": u.get("tenant", world.DEFAULT_TENANT)},
+def _create_user(idp, pool: str, user: dict):
+    idp.admin_create_user(UserPoolId=pool, Username=user["id"], MessageAction="SUPPRESS", UserAttributes=[
+        {"Name": "name", "Value": user["name"]},
+        {"Name": "custom:role", "Value": user["role"]},
+        {"Name": "custom:country", "Value": user["country"]},
+        {"Name": "custom:tenant", "Value": user.get("tenant", world.DEFAULT_TENANT)},
     ])
 
 
 def machine() -> str:
     sfn = client("stepfunctions")
     definition = json.dumps(graph.asl())
-    for m in sfn.list_state_machines()["stateMachines"]:
-        if m["name"] == MACHINE:
-            sfn.update_state_machine(stateMachineArn=m["stateMachineArn"], definition=definition)
-            return m["stateMachineArn"]
+    for existing in sfn.list_state_machines()["stateMachines"]:
+        if existing["name"] == MACHINE:
+            sfn.update_state_machine(stateMachineArn=existing["stateMachineArn"], definition=definition)
+            return existing["stateMachineArn"]
     role = f"arn:aws:iam::{ACCOUNT}:role/mi-graph"
     return sfn.create_state_machine(name=MACHINE, definition=definition, roleArn=role)["stateMachineArn"]
 
 
 def logs():
-    cw = client("logs")
-    if not cw.describe_log_groups(logGroupNamePrefix=LOG_GROUP)["logGroups"]:
-        cw.create_log_group(logGroupName=LOG_GROUP)
-    if not cw.describe_log_streams(logGroupName=LOG_GROUP, logStreamNamePrefix="cases")["logStreams"]:
-        cw.create_log_stream(logGroupName=LOG_GROUP, logStreamName="cases")
+    watch = client("logs")
+    if not watch.describe_log_groups(logGroupNamePrefix=LOG_GROUP)["logGroups"]:
+        watch.create_log_group(logGroupName=LOG_GROUP)
+    if not watch.describe_log_streams(logGroupName=LOG_GROUP, logStreamNamePrefix="cases")["logStreams"]:
+        watch.create_log_stream(logGroupName=LOG_GROUP, logStreamName="cases")
 
 
 def _clear(table: str):
     ddb = client("dynamodb")
-    pk, sk = TABLES[table]
+    hash_key, range_key = TABLES[table]
     for page in ddb.get_paginator("scan").paginate(TableName=table):
-        for it in page["Items"]:
-            key = {pk: it[pk]} | ({sk: it[sk]} if sk else {})
+        for item in page["Items"]:
+            key = {hash_key: item[hash_key]}
+            if range_key:
+                key = key | {range_key: item[range_key]}
             ddb.delete_item(TableName=table, Key=key)
 
 
 def seed(reset: bool = False):
     if reset:
-        for t in TABLES:
-            _clear(t)
+        for table in TABLES:
+            _clear(table)
         db.wipe()
         from hcpagents import ledger
         ledger.new_epoch()
         sqs = client("sqs")
-        for q in QUEUES:
-            sqs.purge_queue(QueueUrl=sqs.get_queue_url(QueueName=q)["QueueUrl"])
-    for t in world.tenants():
-        with world.as_tenant(t["id"]):
+        for queue in QUEUES:
+            sqs.purge_queue(QueueUrl=sqs.get_queue_url(QueueName=queue)["QueueUrl"])
+    for tenant in world.tenants():
+        with world.as_tenant(tenant["id"]):
             _seed_tenant(reset)
 
 
 def _seed_tenant(reset: bool):
     if reset or not store.scan("mi-content"):
         for table, docs in (("mi-content", world.blocks()), ("mi-hcp", world.hcp_world()["hcp"])):
-            for d in docs:
-                store.put(table, d)
-        touches = [{"id": f"touch-{i}", "status": "done", **t} for i, t in enumerate(world.hcp_world().get("touch", []))]
-        planned = [{"status": "planned", **p} for p in world.hcp_world().get("planned", [])]
-        for t in touches + planned:
-            store.put("mi-touches", t)
+            for doc in docs:
+                store.put(table, doc)
+        touches = [{"id": f"touch-{i}", "status": "done", **touch}
+                   for i, touch in enumerate(world.hcp_world().get("touch", []))]
+        planned = [{"status": "planned", **plan} for plan in world.hcp_world().get("planned", [])]
+        for touch in touches + planned:
+            store.put("mi-touches", touch)
         retrieval.index()
 
 
@@ -235,7 +238,7 @@ def provision(reset: bool = False):
     logs()
     seed(reset)
     if reset:
-        cache.flush_tenant("*")  # a reset reseeds every tenant, so every cached answer is stale
+        cache.flush_tenant("*")  # a reset reseeds each tenant, so old answers are stale
 
 
 if __name__ == "__main__":

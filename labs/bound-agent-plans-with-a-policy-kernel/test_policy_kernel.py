@@ -1,4 +1,4 @@
-"""Bound agent plans with a policy kernel: a plan cannot skip a step, rewrite a fact or loop forever."""
+"""Bound agent plans with a policy kernel. A plan cannot skip a step, change a fact or loop for ever."""
 
 import pytest
 

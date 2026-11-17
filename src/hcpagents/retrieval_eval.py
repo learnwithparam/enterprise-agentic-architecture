@@ -1,10 +1,9 @@
-"""Score retrieval on world/retrieval.toml and apply the [retrieval] thresholds in evals/gate.toml.
+"""Score search on world/retrieval.toml and check the limits in evals/gate.toml.
 
-uv run python -m hcpagents.retrieval_eval
+Run it with python -m hcpagents.retrieval_eval.
 
-Four rankers are compared on the same questions: the exact topic filter the agents used before, full-text
-alone, vectors alone, and the hybrid. The hybrid must find the answer at least as often as any single signal,
-and nothing outside the facet gate may ever appear.
+Four rankers are tried on the same questions. They are the old topic filter, text alone, vectors alone, and the hybrid.
+The hybrid must find the answer as often as any single signal. Nothing outside the facet gate may ever show up.
 """
 
 import sys
@@ -12,22 +11,28 @@ import tomllib
 
 from hcpagents import infra, retrieval, store, world
 
-K = 3
+TOP = 3
 CASES = world.ROOT / "world" / "retrieval.toml"
 
 
 def _topic_filter(case: dict) -> list[str]:
-    """What the agents did before: the caller names the topic and gets an exact match. It is given the right topic."""
-    gold = store.get("mi-content", case["answer"]) if case["answer"] else None
-    topic = gold["topic"] if gold else "interactions"
-    return [b["id"] for b in store.content().values() if b["product"] == case["product"] and b["country"] == case["country"]
-            and b["topic"] == topic and world.is_current(b)][:K]
+    """What the agents did before. The caller names the topic and gets an exact match. It is given the right topic."""
+    gold = None
+    if case["answer"]:
+        gold = store.get("mi-content", case["answer"])
+    topic = "interactions"
+    if gold:
+        topic = gold["topic"]
+    return [block["id"] for block in store.content().values()
+            if block["product"] == case["product"] and block["country"] == case["country"]
+            and block["topic"] == topic and world.is_current(block)][:TOP]
 
 
 def rank(case: dict, mode: str) -> list[str]:
     if mode == "topic":
         return _topic_filter(case)
-    return [b["block_id"] for b in retrieval.search(case["query"], case["product"], case["country"], k=K, mode=mode)]
+    found = retrieval.search(case["query"], case["product"], case["country"], limit=TOP, mode=mode)
+    return [block["block_id"] for block in found]
 
 
 def run() -> dict:
@@ -35,32 +40,41 @@ def run() -> dict:
     out = {}
     for mode in ("topic", "fts", "vector", "hybrid"):
         hit = leaks = answerable = 0
-        for c in cases:
-            ids = rank(c, mode)
-            leaks += sum(i in c.get("forbidden", []) for i in ids)
-            if c["answer"]:
+        for case in cases:
+            ids = rank(case, mode)
+            leaks += sum(block_id in case.get("forbidden", []) for block_id in ids)
+            if case["answer"]:
                 answerable += 1
-                hit += c["answer"] in ids
+                hit += case["answer"] in ids
         out[mode] = {"recall_at_k": round(hit / answerable, 4), "outside_gate": leaks}
     return out
 
 
+def _failures(scores: dict, limits: dict) -> list[str]:
+    hybrid = scores["hybrid"]
+    fails = []
+    if hybrid["recall_at_k"] < limits["hybrid_recall_at_k"]:
+        fails.append(f"hybrid recall {hybrid['recall_at_k']} is below {limits['hybrid_recall_at_k']}")
+    others = [score["recall_at_k"] for mode, score in scores.items() if mode != "hybrid"]
+    if hybrid["recall_at_k"] < max(others):
+        fails.append("hybrid finds the answer less often than a single signal")
+    if any(score["outside_gate"] > limits["outside_gate"] for score in scores.values()):
+        fails.append("a block outside the facet gate was returned")
+    return fails
+
+
 def main() -> int:
     infra.provision(reset=True)
-    t = tomllib.loads((world.ROOT / "evals" / "gate.toml").read_text())["retrieval"]
+    limits = tomllib.loads((world.ROOT / "evals" / "gate.toml").read_text())["retrieval"]
     scores = run()
-    for mode, s in scores.items():
-        print(f"{mode:7} recall@{K} {s['recall_at_k']:.2f}  outside the gate {s['outside_gate']}")
-    h = scores["hybrid"]
-    fails = []
-    if h["recall_at_k"] < t["hybrid_recall_at_k"]:
-        fails.append(f"hybrid recall {h['recall_at_k']} is below {t['hybrid_recall_at_k']}")
-    if h["recall_at_k"] < max(s["recall_at_k"] for m, s in scores.items() if m != "hybrid"):
-        fails.append("hybrid finds the answer less often than a single signal")
-    if any(s["outside_gate"] > t["outside_gate"] for s in scores.values()):
-        fails.append("a block outside the facet gate was returned")
-    print("retrieval gate passed" if not fails else "retrieval gate FAILED: " + "; ".join(fails))
-    return 1 if fails else 0
+    for mode, score in scores.items():
+        print(f"{mode:7} recall@{TOP} {score['recall_at_k']:.2f}  outside the gate {score['outside_gate']}")
+    fails = _failures(scores, limits)
+    if fails:
+        print("retrieval gate FAILED: " + "; ".join(fails))
+        return 1
+    print("retrieval gate passed")
+    return 0
 
 
 if __name__ == "__main__":
