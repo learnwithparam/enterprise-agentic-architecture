@@ -30,6 +30,14 @@ sequenceDiagram
     R->>L: rejected
 ```
 
+## Steps
+
+1. Take the deadline from the caller, or use the default.
+2. Wait for a person to close the case until the deadline.
+3. At the deadline, escalate the case and keep waiting.
+
+These are the `# Step` comments in `run`.
+
 ## Run it
 
 ```bash

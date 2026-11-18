@@ -25,6 +25,14 @@ flowchart LR
     B --> F[Far apart touches pass untouched]
 ```
 
+## Steps
+
+1. Go through the plans from the best to the worst.
+2. Find a better plan that clashes and has not lost itself.
+3. If there is one, this plan gives way to it.
+
+These are the `# Step` comments in `arbitrate`.
+
 ## Run it
 
 ```bash

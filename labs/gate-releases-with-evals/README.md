@@ -28,6 +28,14 @@ flowchart LR
     E --> F[Release passes or fails]
 ```
 
+## Steps
+
+1. Read the limits from the gate file.
+2. A score must not fall below its floor.
+3. A count or a cost must not go above its cap.
+
+These are the `# Step` comments in `gate`.
+
 ## Run it
 
 ```bash

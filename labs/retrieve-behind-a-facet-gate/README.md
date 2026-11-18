@@ -23,6 +23,15 @@ flowchart LR
     R --> T[Top k blocks]
 ```
 
+## Steps
+
+1. Turn the question into words and a vector.
+2. Rank inside the facet gate by text and by vector.
+3. Join the two ranks with rank fusion.
+4. Keep the best blocks and read them.
+
+These are the `# Step` comments in `_rank`.
+
 ## Run it
 
 ```bash

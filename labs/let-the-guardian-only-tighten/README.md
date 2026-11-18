@@ -22,6 +22,16 @@ flowchart TD
     H[Human] -->|only a person| ON[Switch it back on]
 ```
 
+## Steps
+
+1. Read the limits.
+2. Look at each country's override rate.
+3. Skip a country with too few decisions or a low rate.
+4. Turn its auto replies off.
+5. Write what was lowered to the ledger.
+
+These are the `# Step` comments in `patrol`.
+
 ## Run it
 
 ```bash

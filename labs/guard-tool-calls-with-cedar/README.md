@@ -30,6 +30,15 @@ flowchart TD
     F -->|allow| G[Tool runs and the call is recorded]
 ```
 
+## Steps
+
+1. Refuse a tool that is not on the allowlist.
+2. Find the country and product the call is about.
+3. Refuse a call for another country or product.
+4. Ask Cedar if this agent may call this tool.
+
+These are the `# Step` comments in `pre_tool`.
+
 ## Run it
 
 ```bash

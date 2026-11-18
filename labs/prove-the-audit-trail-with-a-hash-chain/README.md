@@ -29,6 +29,14 @@ flowchart LR
     F --> G[An edit breaks the chain at that entry]
 ```
 
+## Steps
+
+1. Read every row of this chain.
+2. Redo each hash and name the first row that does not match.
+3. Check the signature on each signed checkpoint.
+
+These are the `# Step` comments in `verify`.
+
 ## Run it
 
 ```bash

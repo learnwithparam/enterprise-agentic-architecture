@@ -27,6 +27,15 @@ flowchart LR
     D -->|no| F[Reply is refused]
 ```
 
+## Steps
+
+1. Keep only the blocks for this product and country.
+2. List which blocks hold each sentence.
+3. Trace each sentence of the reply to a current block.
+4. Check each block against the store as it is now.
+
+These are the `# Step` comments in `verify`.
+
 ## Run it
 
 ```bash

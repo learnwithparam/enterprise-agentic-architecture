@@ -43,7 +43,7 @@ Expect: 5 passed
 
 ## Read
 
-- `src/hcpagents/agent_caps.py`: the three caps, `check` and `charge`.
+- `src/hcpagents/agent_caps.py`: the three caps: `check`, `reserve` and `settle`.
 - `src/hcpagents/case_core.py`: `refuse_over_cap`, which runs before every model call.
 
 ## What the test proves

@@ -31,10 +31,11 @@ flowchart LR
 
 ## Steps
 
-1. Step 1: the model sees tokens and no personal value.
-2. Step 2: one person is one token everywhere in the case.
-3. Step 3: the reply is restored from the vault of the case.
-4. Step 4: a token that is not in this vault stays a token.
+1. Open the vault of this case.
+2. Swap each personal value for one token.
+3. Seal the vault again if it grew.
+
+These are the `# Step` comments in `tokenise`.
 
 ## Run it
 

@@ -24,6 +24,16 @@ flowchart LR
     T -->|draft_invalidated| D[Drafts that quoted it]
 ```
 
+## Steps
+
+1. Read the note and run the safety screen.
+2. A note with no hit is left alone.
+3. Hand the signal to pharmacovigilance.
+4. Freeze contact with that doctor.
+5. Write the signal to the ledger.
+
+These are the `# Step` comments in `_perceive`.
+
 ## Run it
 
 ```bash

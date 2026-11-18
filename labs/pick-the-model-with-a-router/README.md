@@ -28,6 +28,17 @@ flowchart TD
     E -->|yes| F[Sonnet 5.5]
 ```
 
+## Steps
+
+1. Refuse a task or a risk that is not known.
+2. A person takes the call once Sonnet has failed it.
+3. Work out if an earlier try calls for Sonnet.
+4. Narrow work stays on Haiku.
+5. A person takes the call when the budget is too low for Sonnet.
+6. Pick Sonnet and say why.
+
+These are the `# Step` comments in `route`.
+
 ## Run it
 
 ```bash

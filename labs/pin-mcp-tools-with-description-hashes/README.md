@@ -27,9 +27,11 @@ flowchart TD
 
 ## Steps
 
-1. Step 1: every tool has a pin that matches its description.
-2. Step 2: a tool that matches its pin is served.
-3. Step 3: a changed description is refused and named.
+1. Forget the tools left out last time.
+2. A tool that matches its pin is served.
+3. Name a changed tool and skip it.
+
+These are the `# Step` comments in `pinned`.
 
 ## Run it
 

@@ -30,10 +30,13 @@ flowchart LR
 
 ## Steps
 
-1. Step 1: the brief holds one country and one product, and no doctor.
-2. Step 2: the specialist step receives a copy of the brief and nothing else.
-3. Step 3: the lead refuses a block that is not in the brief.
-4. Step 4: the lead refuses a block that is no longer current.
+1. The brief holds one country and one product, and no doctor.
+2. The specialist gets a copy of the brief and nothing else.
+3. The lead refuses a block that is not in the brief or not current.
+4. Write the outcome to the ledger.
+5. A bad answer gives no block.
+
+These are the `# Step` comments in `delegate`.
 
 ## Run it
 

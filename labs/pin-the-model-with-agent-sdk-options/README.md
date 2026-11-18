@@ -30,6 +30,13 @@ flowchart LR
     E --> F[Any other model in the result is refused]
 ```
 
+## Steps
+
+1. Find every model the run used that is not on the list.
+2. Refuse the run and name those models.
+
+These are the `# Step` comments in `check_models`.
+
 ## Run it
 
 ```bash

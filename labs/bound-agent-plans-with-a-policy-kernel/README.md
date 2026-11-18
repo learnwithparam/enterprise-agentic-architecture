@@ -26,6 +26,15 @@ flowchart TD
     D -->|route differs| F
 ```
 
+## Steps
+
+1. The step may set only its own facts.
+2. Record the facts and the finished step.
+3. Ask the graph if the facts imply a route.
+4. The kernel checks that route again.
+
+These are the `# Step` comments in `advance`.
+
 ## Run it
 
 ```bash

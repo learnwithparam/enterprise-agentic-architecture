@@ -28,6 +28,15 @@ flowchart TD
     D --> F[Kernel checks the route matches the facts]
 ```
 
+## Steps
+
+1. Walk the rules in order.
+2. Stop while a fact the rule needs is unknown.
+3. The first rule that matches gives the route.
+4. No rule matched, so the reply may be sent.
+
+These are the `# Step` comments in `decide`.
+
 ## Run it
 
 ```bash

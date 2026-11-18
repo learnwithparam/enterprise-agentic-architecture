@@ -24,6 +24,14 @@ flowchart LR
     C -->|insert for another tenant| F[Refused]
 ```
 
+## Steps
+
+1. Open one transaction as the app user.
+2. Tell the database which tenant this is, so its row rules apply.
+3. Hand the connection to the caller.
+
+These are the `# Step` comments in `session`.
+
 ## Run it
 
 ```bash
