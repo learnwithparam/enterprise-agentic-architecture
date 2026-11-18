@@ -70,9 +70,23 @@ def test_the_caller_is_the_address_the_load_balancer_saw():
 
 
 @pytest.fixture(scope="module")
-def template():
-    app = cdk.App()
-    return Template.from_stack(Platform(app, "T", env=cdk.Environment(account="123456789012", region="eu-central-1")))
+def synthesized(tmp_path_factory):
+    out = tmp_path_factory.mktemp("cdk-out")  # pytest removes this, so a run leaves no copy of the project behind
+    app = cdk.App(outdir=str(out))
+    stack = Platform(app, "T", env=cdk.Environment(account="123456789012", region="eu-central-1"))
+    return out, app.synth(), stack
+
+
+@pytest.fixture(scope="module")
+def template(synthesized):
+    return Template.from_stack(synthesized[2])
+
+
+def test_the_image_asset_holds_only_what_the_dockerfile_copies(synthesized):
+    """Found 19 Nov 2026: with no .dockerignore, each run copied 1.4 GB of .venv and node_modules and filled the disk."""
+    out = synthesized[0]
+    size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
+    assert size < 50_000_000, f"the CDK asset is {size // 1_000_000} MB; check .dockerignore"
 
 
 def test_the_stack_validates_cedar_strictly_against_a_schema_that_names_every_action(template):

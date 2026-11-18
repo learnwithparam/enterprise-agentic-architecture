@@ -1,0 +1,10 @@
+# The image copies only what the Dockerfile names. Everything else stays out of the build context and the CDK asset.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!src
+!policies
+!world
+!migrations
+**/__pycache__
