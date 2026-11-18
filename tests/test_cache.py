@@ -75,5 +75,5 @@ def test_the_always_on_steward_invalidates_a_draft_when_content_is_withdrawn():
                     await asyncio.sleep(0.2)
 
     asyncio.run(scenario())
-    assert any("withdrawn" in p for p in cases.approve("inq-103", BRANDT, auth.reauthenticate(BRANDT, auth.DEMO_PASSWORD))["send_check"]["problems"])
+    assert any("withdrawn" in p for p in cases.approve("inq-103", BRANDT, auth.reauthenticate(BRANDT, auth.local_password(BRANDT["id"])))["send_check"]["problems"])
 

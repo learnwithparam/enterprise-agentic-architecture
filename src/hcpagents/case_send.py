@@ -3,7 +3,7 @@
 import hashlib
 from datetime import UTC, datetime
 
-from hcpagents import events, grounding, store
+from hcpagents import delivery, events, grounding, store, world
 from hcpagents.case_core import Case
 
 STATUS = {
@@ -55,15 +55,35 @@ def send(case: Case, approved_by: str | None) -> bool:
         doc["history"].append({"at": now(), "event": "Send blocked", "detail": check["problems"]})
         case.audit({"type": "send_blocked", "problems": check["problems"]})
         return False
+    message_id = None
+    if doc["hcp"]:
+        message_id = _email(case)
+        if message_id is None:
+            return False
     doc["status"] = "sent"
     doc["sent_at"] = now()
+    doc["delivery_id"] = message_id
     event = "Sent"
     if approved_by:
         event = f"Approved and sent by {approved_by}"
     doc["history"].append({"at": doc["sent_at"], "event": event})
-    case.audit({"type": "reply_sent", "approved_by": approved_by,
+    case.audit({"type": "reply_sent", "approved_by": approved_by, "delivery_id": message_id,
                 "blocks": [(segment["block_id"], segment["version"]) for segment in doc["draft"]["segments"]],
                 "reply_sha256": sha(doc["draft"]["text"])})
     if doc["hcp"]:
         _record_touch(case)
     return True
+
+
+def _email(case: Case) -> str | None:
+    """Email the reply to the doctor who asked. Their question is the request, so no marketing consent is needed. Gives back the message id, or None when it failed."""
+    doc = case.doc
+    hcp = world.hcp(doc["hcp"]["id"])
+    try:
+        return delivery.deliver(hcp["email"], f"Medical information reply for case {doc['id']}",
+                                doc["draft"]["text"], world.current_tenant())
+    except Exception as error:  # noqa: BLE001 - any SES failure must stop the send
+        doc["status"] = "delivery_failed"
+        doc["history"].append({"at": now(), "event": "Delivery failed", "detail": f"{type(error).__name__}: {error}"})
+        case.audit({"type": "delivery_failed", "error": type(error).__name__})
+        return None

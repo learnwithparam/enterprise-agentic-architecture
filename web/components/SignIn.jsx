@@ -41,7 +41,7 @@ export default function SignIn({ onSignedIn }) {
         <section><div className="wrap tight">
           <div className="head"><div>
             <h1 className="page">Sign in</h1>
-            <p>Each person belongs to one client. The server checks the password, signs a token, and Cedar decides what that person may do. Local demo password: <code>local-demo-only</code>.</p>
+            <p>Each person belongs to one client. The server checks the password, signs a token, and Cedar decides what that person may do. Each local demo user has a random password in Secrets Manager. Read it with <code>uv run python -m hcpagents.auth &lt;user id&gt;</code>.</p>
           </div></div>
           <form className="form" id="signin" onSubmit={submit}>
             {listed ? (

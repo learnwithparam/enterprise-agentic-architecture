@@ -9,6 +9,7 @@ country = "DE"
 city = "Berlin"
 registry_id = "DE-LANR-7731904"
 consent = { email = true, rep_visit = true, phone = true }
+email = "kaya@hcp.example"
 records = { crm = "CRM-DE-00412", marketing = "mk-88213", contact_centre = "+49 30 5550 1904", portal = "ekaya@praxis-kaya.example" }
 
 [[hcp]]
@@ -19,6 +20,7 @@ country = "DE"
 city = "Munich"
 registry_id = "DE-LANR-4410288"
 consent = { email = false, rep_visit = true, phone = true }
+email = "brenner@hcp.example"
 records = { crm = "CRM-DE-00977", marketing = "mk-90155", contact_centre = "+49 89 5550 0288", portal = "brenner@derma-muc.example" }
 
 [[hcp]]
@@ -29,6 +31,7 @@ country = "DE"
 city = "Hamburg"
 registry_id = "DE-LANR-6620137"
 consent = { email = true, rep_visit = false, phone = true }
+email = "lorenz@hcp.example"
 records = { crm = "CRM-DE-01133", marketing = "mk-91207", contact_centre = "+49 40 5550 0137", portal = "lorenz@hautarzt-hh.example" }
 
 [[hcp]]
@@ -39,6 +42,7 @@ country = "DE"
 city = "Cologne"
 registry_id = "DE-LANR-3398812"
 consent = { email = true, rep_visit = true, phone = false }
+email = "weiss@hcp.example"
 records = { crm = "CRM-DE-00655", marketing = "mk-87340", contact_centre = "+49 221 5550 8812", portal = "weiss@lunge-koeln.example" }
 
 [[hcp]]
@@ -49,6 +53,7 @@ country = "US"
 city = "Chicago"
 registry_id = "US-NPI-1730284456"
 consent = { email = true, rep_visit = true, phone = true }
+email = "okafor@hcp.example"
 records = { crm = "CRM-US-20481", marketing = "mk-10422", contact_centre = "+1 312 555 0144", portal = "gokafor@lakeshore-derm.example" }
 
 [[hcp]]
@@ -59,6 +64,7 @@ country = "US"
 city = "Denver"
 registry_id = "US-NPI-1952036671"
 consent = { email = true, rep_visit = false, phone = true }
+email = "mills@hcp.example"
 records = { crm = "CRM-US-21907", marketing = "mk-11873", contact_centre = "+1 303 555 0171", portal = "dmills@frontrange-lung.example" }
 
 [[hcp]]
@@ -69,6 +75,7 @@ country = "JP"
 city = "Osaka"
 registry_id = "JP-MDR-0451120"
 consent = { email = true, rep_visit = true, phone = true }
+email = "sato@hcp.example"
 records = { crm = "CRM-JP-30218", marketing = "mk-50199", contact_centre = "+81 6 5550 1120", portal = "k.sato@osaka-kokyuki.example" }
 
 [[hcp]]
@@ -79,6 +86,7 @@ country = "JP"
 city = "Tokyo"
 registry_id = "JP-MDR-0398871"
 consent = { email = false, rep_visit = true, phone = true }
+email = "ito@hcp.example"
 records = { crm = "CRM-JP-30744", marketing = "mk-50631", contact_centre = "+81 3 5550 8871", portal = "y.ito@ginza-hifuka.example" }
 
 # What each channel did, before this platform existed. Four systems, no shared view.

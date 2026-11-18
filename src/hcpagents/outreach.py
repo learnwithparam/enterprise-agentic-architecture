@@ -7,7 +7,15 @@ Each reason names the rule that fired and the case or touch behind it. Each hold
 So Compliance can see why a doctor was not contacted.
 """
 
-from hcpagents import hcp360, ledger, store, supervisor
+from hcpagents import authz, delivery, hcp360, ledger, store, supervisor, world
+
+
+class Denied(Exception):
+    """This user may not approve for this doctor."""
+
+
+class Blocked(Exception):
+    """The touch may not go now. The message holds the reasons."""
 
 
 def _held_reasons(view: dict) -> dict:
@@ -59,3 +67,41 @@ def run(hcp_id: str) -> list[dict]:
                 ledger.append({"type": "outreach_hold", "agent": "outreach-coordinator", "touch": decision["id"],
                                "hcp": hcp_id, "rules": [reason["rule"] for reason in decision["reasons"]]})
     return decisions
+
+
+def _decision(hcp_id: str, touch_ref) -> dict:
+    decisions = coordinate(hcp_id)
+    if isinstance(touch_ref, int):
+        if not 0 <= touch_ref < len(decisions):
+            raise LookupError(f"No planned touch number {touch_ref} for {hcp_id}")
+        return decisions[touch_ref]
+    found = next((decision for decision in decisions if decision["id"] == touch_ref), None)
+    if found is None:
+        raise LookupError(f"No planned touch {touch_ref} for {hcp_id}")
+    return found
+
+
+def approve(hcp_id: str, touch_ref: int | str, approver: dict) -> dict:
+    """A human approves one planned email. The rules run again now, so a case opened since then still blocks it."""
+    hcp = world.hcp(hcp_id)
+    allowed, why = authz.user_can(approver, "ApproveOutreach", "Outreach", hcp_id, {"country": hcp["country"]})
+    ledger.append({"type": "authz", "user": approver["id"], "action": "ApproveOutreach", "allowed": allowed,
+                   "reason": why, "hcp": hcp_id}, subject=hcp_id)
+    if not allowed:
+        raise Denied(f"{approver['name']} may not approve outreach for {hcp_id}. {why}")
+    decision = _decision(hcp_id, touch_ref)
+    touch = store.get("mi-touches", decision["id"])
+    if decision["action"] != "propose":
+        rules = [reason["rule"] for reason in decision["reasons"]]
+        ledger.append({"type": "outreach_blocked", "touch": touch["id"], "hcp": hcp_id, "rules": rules}, subject=hcp_id)
+        raise Blocked(f"{touch['id']} is held: {', '.join(rules)}")
+    if touch["kind"] != "email":
+        raise Blocked(f"{touch['id']} is a {touch['kind']}, and only emails go through delivery")
+    block = store.content()[touch["content"]]
+    message_id = delivery.deliver(hcp["email"], touch["summary"], block["text"], world.current_tenant())
+    sent = touch | {"status": "done", "on": world.TODAY.isoformat(), "approved_by": approver["name"],
+                    "delivery_id": message_id}
+    store.put("mi-touches", sent)
+    ledger.append({"type": "outreach_sent", "touch": touch["id"], "hcp": hcp_id, "approved_by": approver["id"],
+                   "delivery_id": message_id, "block": [block["id"], block["version"]]}, subject=hcp_id)
+    return sent

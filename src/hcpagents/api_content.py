@@ -24,10 +24,10 @@ def content():
 
 @router.post("/api/content/{block_id}/withdraw")
 def withdraw(block_id: str, body: Decision, user: dict = Depends(current_user)):
-    if store.get("mi-content", block_id) is None:
-        raise HTTPException(404, "No such block")
     try:
         return cases.withdraw(block_id, user, body.note or "Withdrawn by content owner")  # the steward checks the drafts again
+    except LookupError as error:
+        raise HTTPException(404, "No such block") from error
     except cases.Denied as error:
         denied(error)
 

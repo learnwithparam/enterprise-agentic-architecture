@@ -83,5 +83,5 @@ def test_password_grant_removed():
     assert c["AllowedOAuthFlows"] == ["code"]
     oidc = httpx.get(f"{auth.issuer()}/.well-known/openid-configuration").json()
     refused = httpx.post(oidc["token_endpoint"], data={"grant_type": "password", "client_id": auth.cli_client_id(),
-                                                       "username": "u-brandt", "password": auth.DEMO_PASSWORD})
+                                                       "username": "u-brandt", "password": auth.local_password("u-brandt")})
     assert refused.status_code >= 400 and "id_token" not in refused.text

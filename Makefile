@@ -1,3 +1,7 @@
+# Every target here runs on a laptop against Floci. Production sets neither value (see src/hcpagents/aws.py).
+export MI_ENV ?= local
+export MI_AWS_ENDPOINT ?= http://localhost:4566
+
 .PHONY: up down provision test evals record serve web walkthrough check lab
 
 up:            ## start Floci (local AWS), Postgres, Temporal and Valkey, then provision every resource (first run downloads a 220 MB embedding model)

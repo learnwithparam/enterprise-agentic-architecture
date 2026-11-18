@@ -194,7 +194,7 @@ block marked Not current with who withdrew it, and the toast "Withdrawn. Drafts 
 ### Approval blocked at send
 
 **Switch persona** to Dr. Lena Brandt, German reviewer. **Go to** `/case?id=inq-103` and press **Approve and
-send**, then enter the demo password in the signature dialog and press **Sign and send**. **Show** the two renal sentences marked withdrawn and the toast "Send blocked: the draft no longer
+send**, then enter that user's local password in the signature dialog (read it with `uv run python -m hcpagents.auth u-brandt`) and press **Sign and send**. **Show** the two renal sentences marked withdrawn and the toast "Send blocked: the draft no longer
 matches current content". Only Reject is offered now.
 
 **Say:** "Even a human approval cannot send stale content. The check runs again at the instant of sending

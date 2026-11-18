@@ -28,7 +28,8 @@ a request to a client company. Row-level security (ADR 0009) is only as strong a
 ## Consequences
 
 Machine callers (agents, the MCP server, the CLI) get tokens from the same provider in later steps. The
-demo password is a synthetic local value, overridable with `MI_DEMO_PASSWORD`.
+local demo passwords are random per user and live in Secrets Manager under `/mi/users/<id>`. Read one with
+`uv run python -m hcpagents.auth <user id>`. Password sign-in works only when `MI_ENV` is `local`.
 
 ## Enforced by
 

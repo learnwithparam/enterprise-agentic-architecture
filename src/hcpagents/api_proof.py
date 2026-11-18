@@ -1,4 +1,4 @@
-"""Console routes for the proof screen, the design page and the reset."""
+"""Console routes for the proof screen and the design page. The tamper and reset demos are a second router, local only."""
 
 import json
 
@@ -7,8 +7,10 @@ from pydantic import BaseModel
 
 from hcpagents import agents, authz, cases, events, graph, infra, ledger, observe, store, world
 from hcpagents.api_user import current_user, denied, require_compliance
+from hcpagents.aws import is_local
 
 router = APIRouter()
+demo_router = APIRouter()  # these break things on purpose, so only a local run gets them
 EVAL_REPORT = world.ROOT / "evals" / "report.json"
 
 
@@ -53,7 +55,7 @@ def _is_automatic_route(row: dict) -> bool:
     return row["entry"].get("type") == "routed" and row["entry"].get("route") != "send"
 
 
-@router.post("/api/proof/tamper")
+@demo_router.post("/api/proof/tamper")
 def tamper(user: dict = Depends(current_user)):
     require_compliance(user)
     rows = ledger.entries()
@@ -64,7 +66,7 @@ def tamper(user: dict = Depends(current_user)):
     return {"tampered": changed, "by": user["name"], "verify": ledger.verify()}
 
 
-@router.post("/api/proof/restore")
+@demo_router.post("/api/proof/restore")
 def restore(user: dict = Depends(current_user)):
     require_compliance(user)
     check = ledger.verify()
@@ -73,7 +75,7 @@ def restore(user: dict = Depends(current_user)):
     return ledger.verify()
 
 
-@router.post("/api/proof/delete-archive")
+@demo_router.post("/api/proof/delete-archive")
 def delete_archive(user: dict = Depends(current_user)):
     require_compliance(user)
     return ledger.try_delete_archive(1)
@@ -90,7 +92,7 @@ def architecture():
             "cedar": {file.name: file.read_text() for file in sorted((world.ROOT / "policies" / "cedar").glob("*.cedar"))}}
 
 
-@router.post("/api/reset")
+@demo_router.post("/api/reset")
 def reset(user: dict = Depends(current_user)):
     allowed, reason = authz.user_can(user, "ResetDemo", "Ledger", "main", {})
     if not allowed:
@@ -99,3 +101,10 @@ def reset(user: dict = Depends(current_user)):
     authz._store.cache_clear()
     authz._policy_file.cache_clear()
     return {"ok": True}
+
+
+def routers() -> list[APIRouter]:
+    """The routes to serve. The demo routes join them only when MI_ENV is local."""
+    if is_local():
+        return [router, demo_router]
+    return [router]

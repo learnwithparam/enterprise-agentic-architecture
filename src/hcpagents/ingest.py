@@ -86,6 +86,9 @@ def accept(tenant: str, channel: str, raw: dict, via: str) -> dict:
         if new:
             from hcpagents import events  # events imports infra, which imports this module
             events.publish("InteractionReceived", {"interaction": row_id}, key=f"ix-{row_id}")
+    if record.kind == "question":
+        from hcpagents import ingest_cases  # a late import, as above
+        ingest_cases.open_case(tenant, channel, row_id, record.model_dump(mode="json"))
     return {"id": row_id, "duplicate": new is None}
 
 

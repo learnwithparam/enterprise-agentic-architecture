@@ -11,6 +11,7 @@ import aws_cdk as cdk
 from aws_cdk import (
     aws_bedrock as bedrock,
     aws_codedeploy as codedeploy,
+    aws_cloudwatch as cloudwatch,
     aws_cognito as cognito,
     aws_ec2 as ec2,
     aws_ecs as ecs,
@@ -24,10 +25,15 @@ from aws_cdk import (
     aws_rds as rds,
     aws_s3 as s3,
     aws_secretsmanager as secrets,
+    aws_sqs as sqs,
+    aws_ssm as ssm,
     aws_verifiedpermissions as avp,
+    aws_wafv2 as wafv2,
     custom_resources as cr,
 )
 from constructs import Construct
+
+from hcpagents import identity_spec
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_SECRET = "mi/db/hcp_app"  # the same name hcpagents.db reads
@@ -69,6 +75,7 @@ class Platform(cdk.Stack):
         self.database = self.postgres()
         self.cache = self.valkey()
         self.users = self.identity()
+        self.dead_letters = self.parked_events()
         self.policies = self.cedar()
         self.compute()
 
@@ -143,19 +150,40 @@ class Platform(cdk.Stack):
             subnet_ids=self.vpc.select_subnets(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED).subnet_ids)
 
     def identity(self) -> cognito.UserPool:
+        """The same attributes, clients and SSM names the local emulator makes (identity_spec.py)."""
         pool = cognito.UserPool(
             self, "Users", self_sign_up_enabled=False, mfa=cognito.Mfa.REQUIRED, mfa_second_factor=cognito.MfaSecondFactor(otp=True, sms=False),
-            password_policy=cognito.PasswordPolicy(min_length=14, require_digits=True, require_symbols=True, require_lowercase=True, require_uppercase=True),
+            password_policy=cognito.PasswordPolicy(
+                min_length=identity_spec.PASSWORD_MIN_LENGTH, require_digits=identity_spec.PASSWORD_REQUIRES["digits"],
+                require_symbols=identity_spec.PASSWORD_REQUIRES["symbols"], require_lowercase=identity_spec.PASSWORD_REQUIRES["lowercase"],
+                require_uppercase=identity_spec.PASSWORD_REQUIRES["uppercase"]),
             feature_plan=cognito.FeaturePlan.PLUS, standard_threat_protection_mode=cognito.StandardThreatProtectionMode.FULL_FUNCTION, removal_policy=cdk.RemovalPolicy.RETAIN,
-            custom_attributes={"tenant": cognito.StringAttribute(mutable=False), "role": cognito.StringAttribute(mutable=True)})
+            custom_attributes={name: cognito.StringAttribute(mutable=mutable) for name, mutable in identity_spec.ATTRIBUTES.items()})
         # a signed-in user may not write their own role or tenant, so the claims Cedar reads stay admin-only
-        pool.add_client("Console", auth_flows=cognito.AuthFlow(user_srp=True), generate_secret=False,
-                        write_attributes=cognito.ClientAttributes().with_standard_attributes(fullname=True))
+        names_only = cognito.ClientAttributes().with_standard_attributes(fullname=True)
+        console = pool.add_client("Console", auth_flows=cognito.AuthFlow(user_srp=True), generate_secret=False, write_attributes=names_only,
+                              disable_o_auth=True)  # no implicit grant: the CDK default adds one
+        cli = pool.add_client(
+            "Cli", generate_secret=False, write_attributes=names_only, supported_identity_providers=[cognito.UserPoolClientIdentityProvider.COGNITO],
+            o_auth=cognito.OAuthSettings(flows=cognito.OAuthFlows(authorization_code_grant=True), scopes=[cognito.OAuthScope.OPENID],
+                                         callback_urls=[identity_spec.CLI_REDIRECT]))
+        pool.add_domain("SignIn", cognito_domain=cognito.CognitoDomainOptions(domain_prefix=f"mi-{self.account}"))  # the hosted page the CLI opens
+        for name, parameter, value in (("PoolName", identity_spec.POOL_PARAMETER, pool.user_pool_id),
+                                       ("ClientName", identity_spec.CLIENT_PARAMETER, console.user_pool_client_id),
+                                       ("CliClientName", identity_spec.CLI_CLIENT_PARAMETER, cli.user_pool_client_id)):
+            ssm.StringParameter(self, name, parameter_name=parameter, string_value=value)
         return pool
 
+    def parked_events(self) -> sqs.Queue:
+        """A dead-letter queue and its alarm. Today events.py parks failed events in Postgres, so this stays empty until a producer sends here."""
+        queue = sqs.Queue(self, "DeadLetters", encryption=sqs.QueueEncryption.SQS_MANAGED, enforce_ssl=True, retention_period=cdk.Duration.days(14))
+        suppress(queue, "AwsSolutions-SQS3", "This queue is the dead-letter queue, so it has none of its own.")
+        return queue
+
     def cedar(self) -> avp.CfnPolicyStore:
-        """Every policy file in policies/cedar becomes one Verified Permissions policy."""
-        store = avp.CfnPolicyStore(self, "Policies", validation_settings=avp.CfnPolicyStore.ValidationSettingsProperty(mode="OFF"))
+        """Every policy file in policies/cedar becomes one Verified Permissions policy, checked against policies/schema.json."""
+        store = avp.CfnPolicyStore(self, "Policies", validation_settings=avp.CfnPolicyStore.ValidationSettingsProperty(mode="STRICT"),
+            schema=avp.CfnPolicyStore.SchemaDefinitionProperty(cedar_json=(ROOT / "policies" / "schema.json").read_text()))
         for f in sorted((ROOT / "policies" / "cedar").glob("*.cedar")):
             avp.CfnPolicy(self, f"Policy-{f.stem}", policy_store_id=store.attr_policy_store_id, definition=avp.CfnPolicy.PolicyDefinitionProperty(
                 static=avp.CfnPolicy.StaticPolicyDefinitionProperty(statement=f.read_text())))
@@ -214,7 +242,8 @@ class Platform(cdk.Stack):
         self.database.connections.allow_default_port_from(worker)
         for service in (api.service, worker):
             service.node.add_dependency(migrated)  # the schema is current before any new task starts
-        self.blue_green(api)
+        self.firewall(api)
+        self.blue_green(api, self.alarms(api))
 
     def migration(self, cluster: ecs.Cluster, image) -> cdk.CustomResource:
         """Runs `python -m hcpagents.db` as a one-off task whenever the image changes, and fails the deploy if it fails."""
@@ -260,7 +289,39 @@ class Platform(cdk.Stack):
         resource.node.add_dependency(self.database)
         return resource
 
-    def blue_green(self, api: patterns.ApplicationLoadBalancedFargateService) -> codedeploy.EcsDeploymentGroup:
+    def alarms(self, api: patterns.ApplicationLoadBalancedFargateService) -> list[cloudwatch.Alarm]:
+        """Server errors at the load balancer, server errors from the tasks, and any parked event. A deploy rolls back while one rings."""
+        minute = cdk.Duration.minutes(1)
+        errors = {"Elb5xx": api.load_balancer.metrics.http_code_elb(elbv2.HttpCodeElb.ELB_5XX_COUNT, period=minute, statistic="Sum"),
+                  "Target5xx": api.target_group.metrics.http_code_target(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, period=minute, statistic="Sum")}
+        found = [cloudwatch.Alarm(self, name, metric=metric, threshold=5, evaluation_periods=2, treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
+                                  comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD) for name, metric in errors.items()]
+        found.append(cloudwatch.Alarm(
+            self, "DeadLetterDepth", metric=self.dead_letters.metric_approximate_number_of_messages_visible(period=minute), threshold=1, evaluation_periods=1,
+            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING, comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD))
+        return found
+
+    def firewall(self, api: patterns.ApplicationLoadBalancedFargateService) -> wafv2.CfnWebACL:
+        """AWS's common rules plus a cap per address, in front of the load balancer."""
+        def visible(name: str) -> wafv2.CfnWebACL.VisibilityConfigProperty:
+            return wafv2.CfnWebACL.VisibilityConfigProperty(cloud_watch_metrics_enabled=True, metric_name=name, sampled_requests_enabled=True)
+
+        common = wafv2.CfnWebACL.RuleProperty(
+            name="CommonRules", priority=1, override_action=wafv2.CfnWebACL.OverrideActionProperty(none={}), visibility_config=visible("CommonRules"),
+            statement=wafv2.CfnWebACL.StatementProperty(managed_rule_group_statement=wafv2.CfnWebACL.ManagedRuleGroupStatementProperty(
+                vendor_name="AWS", name="AWSManagedRulesCommonRuleSet",
+                # signed channel webhooks can carry bodies over the 8 KB default, and their HMAC already proves them
+                rule_action_overrides=[wafv2.CfnWebACL.RuleActionOverrideProperty(
+                    name="SizeRestrictions_BODY", action_to_use=wafv2.CfnWebACL.RuleActionProperty(count={}))])))
+        per_address = wafv2.CfnWebACL.RuleProperty(
+            name="PerAddressCap", priority=2, action=wafv2.CfnWebACL.RuleActionProperty(block={}), visibility_config=visible("PerAddressCap"),
+            statement=wafv2.CfnWebACL.StatementProperty(rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(limit=1000, aggregate_key_type="IP")))
+        acl = wafv2.CfnWebACL(self, "Firewall", scope="REGIONAL", default_action=wafv2.CfnWebACL.DefaultActionProperty(allow={}),
+                              visibility_config=visible("Firewall"), rules=[common, per_address])
+        wafv2.CfnWebACLAssociation(self, "FirewallOnLoadBalancer", resource_arn=api.load_balancer.load_balancer_arn, web_acl_arn=acl.attr_arn)
+        return acl
+
+    def blue_green(self, api: patterns.ApplicationLoadBalancedFargateService, alarms: list[cloudwatch.Alarm]) -> codedeploy.EcsDeploymentGroup:
         """CodeDeploy shifts 10 percent of traffic to the new task set, waits five minutes, then the rest. A failed
         health check or deployment sends it back. The test listener lets a check hit the new tasks first."""
         green = elbv2.ApplicationTargetGroup(
@@ -273,7 +334,7 @@ class Platform(cdk.Stack):
             blue_green_deployment_config=codedeploy.EcsBlueGreenDeploymentConfig(
                 blue_target_group=api.target_group, green_target_group=green, listener=api.listener, test_listener=test,
                 termination_wait_time=cdk.Duration.minutes(5)),
-            auto_rollback=codedeploy.AutoRollbackConfig(failed_deployment=True, deployment_in_alarm=False))
+            alarms=alarms, auto_rollback=codedeploy.AutoRollbackConfig(failed_deployment=True, deployment_in_alarm=True))
         suppress(group, "AwsSolutions-IAM4[Policy::arn:<AWS::Partition>:iam::aws:policy/AWSCodeDeployRoleForECS]",
                  "AWS publishes this policy for CodeDeploy to shift ECS traffic; it is the documented service role.")
         return group

@@ -20,7 +20,7 @@ def fresh():
 
 def as_user(user_id):
     """Sign in through the API, as the console does, and return the Authorization header."""
-    r = TestClient(api.app).post("/api/login", json={"user": user_id, "password": auth.DEMO_PASSWORD})
+    r = TestClient(api.app).post("/api/login", json={"user": user_id, "password": auth.local_password(user_id)})
     return {"Authorization": f"Bearer {r.json()['token']}"}
 
 
@@ -30,7 +30,7 @@ def run(i):
 
 def sign(user):
     """The approver's fresh sign-in, as the console sends it."""
-    return auth.reauthenticate(user, auth.DEMO_PASSWORD)
+    return auth.reauthenticate(user, auth.local_password(user["id"]))
 
 
 def test_auto_send_records_a_touch_on_the_hcp_timeline():
@@ -109,7 +109,7 @@ def test_field_rep_sees_status_but_not_case_detail():
 def test_api_refuses_approval_with_403_and_reason():
     with TestClient(api.app) as c:  # the lifespan runs the worker
         c.post("/api/inquiries/inq-103/run", headers=as_user("u-brandt"))
-        r = c.post("/api/cases/inq-103/approve", headers=as_user("u-hale"), json={"password": auth.DEMO_PASSWORD})
+        r = c.post("/api/cases/inq-103/approve", headers=as_user("u-hale"), json={"password": auth.local_password("u-hale")})
     assert r.status_code == 403 and "Verified Permissions" in r.json()["detail"]
 
 

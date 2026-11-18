@@ -1,13 +1,13 @@
 // Visits every console route in Chromium against the built console and fails on a missing Content-Security-Policy
 // header or any securitypolicyviolation event. Starts its own API on a spare port so `make check` needs no server.
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const root = new URL('../..', import.meta.url).pathname;
 const port = 8791;
 const base = `http://127.0.0.1:${port}`;
-const PASSWORD = process.env.MI_DEMO_PASSWORD || 'local-demo-only';
+const PASSWORD = execFileSync('uv', ['run', 'python', '-m', 'hcpagents.auth', 'u-raman'], { encoding: 'utf8', cwd: root }).trim(); // random per local user, in Secrets Manager
 const query = { case: '?id=inq-101', hcp: '?id=hcp-kaya' };
 const pages = readdirSync(new URL('../app', import.meta.url), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
 const routes = ['/', ...pages.map((p) => `/${p}${query[p] || ''}`)];

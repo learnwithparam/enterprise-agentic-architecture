@@ -2,6 +2,7 @@
 // from a running console (`make serve`) on freshly provisioned data with every inbox inquiry run.
 // scripts/walkthrough.sh prepares that state, runs this and converts the PNGs to WebP.
 // Writes <out>/<screen>-desktop.png: the 1440x900 window as a viewer sees it. FULL=1 captures whole pages.
+import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -10,7 +11,8 @@ const out = process.argv[2];
 if (!out) throw new Error('usage: node scripts/capture.mjs <out-dir>');
 const base = process.env.MI_CONSOLE || 'http://localhost:8765';
 const full = process.env.FULL === '1';
-const PASSWORD = process.env.MI_DEMO_PASSWORD || 'local-demo-only';
+// Each local user has a random password in Secrets Manager. The auth module prints it.
+const PASSWORD = execFileSync('uv', ['run', 'python', '-m', 'hcpagents.auth', 'u-raman'], { encoding: 'utf8' }).trim();
 
 // Sign in the way the console does: exchange the password for a token over the API.
 const tokens = {};

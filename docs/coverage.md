@@ -43,6 +43,14 @@ A dash means the requirement has no screen or no lab of its own. Every row has a
 | A field rep sees status but not detail | case-study.md | /review | guard-tool-calls-with-cedar | tests/test_flow.py::test_field_rep_sees_status_but_not_case_detail |
 | Content withdrawn mid-review blocks the send | product-walkthrough.md | /content | - | tests/test_flow.py::test_withdrawn_content_invalidates_the_draft_and_blocks_the_send |
 | Edge cases and open questions | case-study.md | - | - | tests/test_rules.py::test_scope_is_per_country |
+| A grounded reply is emailed and the ledger names the message | architecture-walkthrough.md | - | - | tests/test_delivery.py::test_the_outbox_holds_the_exact_grounded_reply_and_the_ledger_names_the_message |
+| A withdrawn block sends no email | architecture-walkthrough.md | /content | - | tests/test_delivery.py::test_a_block_withdrawn_before_the_send_sends_nothing |
+| A reply to a doctor who asked is sent without marketing consent | case-study.md | /hcp | - | tests/test_delivery.py::test_a_reply_to_a_doctor_who_asked_is_sent_even_without_marketing_consent |
+| A failed delivery is never marked sent | architecture-walkthrough.md | - | - | tests/test_delivery.py::test_a_delivery_that_fails_is_not_marked_sent |
+| A planned touch is checked again when a human approves it | case-study.md | /hcp | arbitrate-agents-with-a-supervisor | tests/test_outreach_approval.py::test_an_open_medical_case_blocks_an_approved_touch |
+| A rep approves outreach only in their own country | case-study.md | /hcp | - | tests/test_outreach_approval.py::test_only_a_rep_in_the_doctors_country_may_approve |
+| A safety signal opens an intake with a 24 hour clock | case-study.md | - | - | tests/test_handoff_workers.py::test_a_safety_signal_opens_an_intake_with_a_24_hour_clock |
+| Review handoffs reach the reviewers and overdue ones escalate | architecture-walkthrough.md | /review | - | tests/test_handoff_workers.py::test_a_review_overdue_event_escalates_the_case_once |
 
 ## Role requirements
 
@@ -93,4 +101,22 @@ A dash means the requirement has no screen or no lab of its own. Every row has a
 | CLI | architecture-walkthrough.md | - | - | tests/test_cli.py::test_login_keeps_the_token_private_and_commands_use_it |
 | Endpoints with streaming | adr/0028-machine-interfaces-share-one-front-door.md | / | - | tests/test_interfaces.py::test_the_case_stream_ends_with_its_status |
 | Rate limits | adr/0028-machine-interfaces-share-one-front-door.md | - | - | tests/test_interfaces.py::test_a_user_over_the_limit_is_told_to_wait |
+| Channel questions open cases once | architecture-walkthrough.md | /inbox | - | tests/test_ingest_cases.py::test_a_signed_question_opens_exactly_one_case_and_a_repeat_opens_none |
+| Email copy is fact-checked against approved content | architecture-walkthrough.md | - | ground-replies-with-approved-blocks | tests/test_factcheck.py::test_an_invented_sentence_is_flagged |
 | SaaS console | adr/0030-agents-have-a-roster-and-the-console-is-a-static-next-export.md | / | - | tests/test_console.py::test_every_path_the_console_calls_is_a_route |
+
+## Hardening
+
+| Requirement | Doc | Screen | Lab | Test |
+|---|---|---|---|---|
+| The cloud and local user pools match | adr/0010-signed-tokens-and-server-side-tenant.md | - | - | tests/test_auth_parity.py::test_the_pool_has_every_attribute_the_app_reads_and_requires_mfa |
+| A sign-in that needs an MFA code says so | adr/0010-signed-tokens-and-server-side-tenant.md | / | - | tests/test_auth_parity.py::test_an_mfa_challenge_is_unauthenticated_not_a_key_error |
+| Password sign-in works only on a local run | adr/0010-signed-tokens-and-server-side-tenant.md | / | - | tests/test_auth_parity.py::test_password_sign_in_refuses_outside_the_local_emulator |
+| Local demo passwords are random per user | adr/0010-signed-tokens-and-server-side-tenant.md | / | - | tests/test_auth_parity.py::test_each_local_user_has_their_own_random_password |
+| Demo routes exist only on a local run | architecture-walkthrough.md | /proof | - | tests/test_hardening.py::test_the_demo_routes_exist_only_when_the_run_is_local |
+| Production uses real AWS unless told otherwise | adr/0003-floci-locally-bedrock-in-production.md | - | - | tests/test_hardening.py::test_production_names_no_aws_endpoint_so_it_talks_to_real_aws |
+| Sign-in and channel webhooks are rate limited | adr/0028-machine-interfaces-share-one-front-door.md | - | - | tests/test_hardening.py::test_a_caller_over_the_limit_gets_429_on_sign_in_and_on_the_webhook |
+| Cedar is validated strictly against a schema | adr/0010-signed-tokens-and-server-side-tenant.md | - | - | tests/test_hardening.py::test_the_stack_validates_cedar_strictly_against_a_schema_that_names_every_action |
+| Alarms on 5xx and parked events stop a deploy | architecture-walkthrough.md | - | - | tests/test_hardening.py::test_the_stack_alarms_on_5xx_and_parked_events_and_a_deploy_rolls_back_on_them |
+| A firewall guards the load balancer | architecture-walkthrough.md | - | - | tests/test_hardening.py::test_the_load_balancer_sits_behind_a_firewall_with_common_rules_and_a_rate_cap |
+| Withdrawing an unknown block is a 404 | architecture-walkthrough.md | /content | - | tests/test_hardening.py::test_withdrawing_an_unknown_block_is_a_404_not_a_crash |

@@ -25,7 +25,7 @@ def _by_id(case: dict) -> str:
 
 def _user(context: Context, tool: str) -> dict:
     user = context.request_context.request.state.user
-    allowed, reason = authz.user_can(user, "CallMcpTool", "Tool", tool, {"sensitive": TOOLS[tool]})
+    allowed, reason = authz.user_can(user, "CallMcpTool", "McpTool", tool, {"sensitive": TOOLS[tool]})
     if not allowed:
         raise ToolDenied(f"{user['id']} may not call {tool}. {reason}")
     return user

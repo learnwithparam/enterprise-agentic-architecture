@@ -14,12 +14,12 @@ import re
 from functools import cache
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from hcpagents import api_agents, api_cases, api_content, api_proof, auth, aws, db, durable, gateway, ingest, mcp_server, ratelimit, v1, world
+from hcpagents import api_agents, api_cases, api_check, api_content, api_outreach, api_proof, auth, aws, db, durable, gateway, ingest, mcp_server, ratelimit, v1, world
 
 
 @contextlib.asynccontextmanager
@@ -51,6 +51,7 @@ MACHINE = ("/v1/", "/mcp")
 class Login(BaseModel):
     user: str
     password: str
+    mfa_code: str | None = None
 
 
 @app.middleware("http")
@@ -77,7 +78,7 @@ async def verified_token_on_every_api_call(request: Request, call_next):
     return await call_next(request)
 
 
-@app.post("/hooks/{tenant}/{channel}", status_code=202)
+@app.post("/hooks/{tenant}/{channel}", status_code=202, dependencies=[Depends(ratelimit.HOOKS)])
 async def channel_webhook(tenant: str, channel: str, request: Request):
     """A channel reports an event. There is no token here. The HMAC signature over the body is the credential."""
     if tenant not in {entry["id"] for entry in world.tenants()}:
@@ -92,10 +93,10 @@ async def channel_webhook(tenant: str, channel: str, request: Request):
         raise HTTPException(422, "The body is not JSON") from error
 
 
-@app.post("/api/login")
+@app.post("/api/login", dependencies=[Depends(ratelimit.LOGIN)])
 def login(body: Login):
     try:
-        return {"token": auth.login(body.user, body.password)}
+        return {"token": auth.login(body.user, body.password, body.mfa_code)}
     except auth.Unauthenticated as error:
         raise HTTPException(401, str(error)) from error
 
@@ -137,7 +138,7 @@ def add_routes(router: APIRouter) -> None:
         app.add_api_route(route.path, route.endpoint, methods=sorted(route.methods))
 
 
-for routes in (api_cases.router, api_content.router, api_proof.router, api_agents.router):
+for routes in (api_cases.router, api_check.router, api_content.router, api_outreach.router, *api_proof.routers(), api_agents.router):
     add_routes(routes)
 app.include_router(v1.router)
 app.mount("/mcp", mcp_server.mount)

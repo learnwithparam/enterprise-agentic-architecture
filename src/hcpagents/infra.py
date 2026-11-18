@@ -7,18 +7,19 @@ The locked archive stays.
 import contextlib
 import hashlib
 import json
+import secrets
 import sys
 
 from botocore.exceptions import ClientError
 
-from hcpagents import auth, cache, db, graph, ingest, retrieval, store, world
+from hcpagents import cache, db, graph, identity_spec, ingest, retrieval, store, world
 from hcpagents.aws import REGION, client
 
 TABLES = {"mi-ledger": ("chain", "seq")}  # everything else lives in Postgres (db.py)
 ARCHIVE = "mi-ledger-archive"
 BUS = "mi-events"
 QUEUES = {"mi-pv-intake": "SafetySignal", "mi-medical-review": "ReviewNeeded", "mi-content-invalidation": "ContentWithdrawn",
-          "mi-interactions": "InteractionReceived"}
+          "mi-interactions": "InteractionReceived", "mi-review-overdue": "ReviewOverdue"}
 KEY_ALIAS = "alias/mi-ledger"
 MACHINE = "mi-inquiry-graph"
 LOG_GROUP = "/mi/agents"
@@ -122,39 +123,68 @@ def _statements(text: str) -> list[str]:
     return [piece.strip() + ";" for piece in body.split(";") if piece.strip()]
 
 
+def _parameter(ssm, name: str) -> str | None:
+    try:
+        return ssm.get_parameter(Name=name)["Parameter"]["Value"]
+    except ClientError:
+        return None
+
+
+def _user_pool(idp, ssm) -> str:
+    pool = _parameter(ssm, identity_spec.POOL_PARAMETER)
+    if pool:
+        return pool
+    pool = idp.create_user_pool(PoolName=POOL, Policies={"PasswordPolicy": {
+        "MinimumLength": identity_spec.PASSWORD_MIN_LENGTH,
+        "RequireNumbers": identity_spec.PASSWORD_REQUIRES["digits"], "RequireSymbols": identity_spec.PASSWORD_REQUIRES["symbols"],
+        "RequireLowercase": identity_spec.PASSWORD_REQUIRES["lowercase"], "RequireUppercase": identity_spec.PASSWORD_REQUIRES["uppercase"]}},
+        Schema=_attribute_schema())["UserPool"]["Id"]
+    ssm.put_parameter(Name=identity_spec.POOL_PARAMETER, Value=pool, Type="String", Overwrite=True)
+    return pool
+
+
+def _attribute_schema() -> list[dict]:
+    return [{"Name": name, "AttributeDataType": "String", "Mutable": mutable} for name, mutable in identity_spec.ATTRIBUTES.items()]
+
+
+def _app_client(idp, ssm, pool: str, parameter: str, **options) -> str:
+    client_id = _parameter(ssm, parameter)
+    if client_id:
+        return client_id
+    client_id = idp.create_user_pool_client(UserPoolId=pool, GenerateSecret=False, **options)["UserPoolClient"]["ClientId"]
+    ssm.put_parameter(Name=parameter, Value=client_id, Type="String", Overwrite=True)
+    return client_id
+
+
 def users():
     idp, ssm = client("cognito-idp"), client("ssm")
-    try:
-        pool = ssm.get_parameter(Name="/mi/cognito/pool")["Parameter"]["Value"]
-    except ClientError:
-        pool = idp.create_user_pool(PoolName=POOL, Schema=[
-            {"Name": "role", "AttributeDataType": "String", "Mutable": True},
-            {"Name": "country", "AttributeDataType": "String", "Mutable": True},
-            {"Name": "tenant", "AttributeDataType": "String", "Mutable": True},
-        ])["UserPool"]["Id"]
-        ssm.put_parameter(Name="/mi/cognito/pool", Value=pool, Type="String", Overwrite=True)
-    try:
-        client_id = ssm.get_parameter(Name="/mi/cognito/client")["Parameter"]["Value"]
-    except ClientError:
-        client_id = idp.create_user_pool_client(UserPoolId=pool, ClientName="mi-console", GenerateSecret=False,
-            ExplicitAuthFlows=["ALLOW_ADMIN_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"])["UserPoolClient"]["ClientId"]
-        ssm.put_parameter(Name="/mi/cognito/client", Value=client_id, Type="String", Overwrite=True)
-    try:
-        client_id_cli = ssm.get_parameter(Name="/mi/cognito/cli-client")["Parameter"]["Value"]
-    except ClientError:
-        client_id_cli = idp.create_user_pool_client(
-            UserPoolId=pool, ClientName="mi-cli", GenerateSecret=False, ExplicitAuthFlows=["ALLOW_REFRESH_TOKEN_AUTH"],
-            AllowedOAuthFlows=["code"], AllowedOAuthFlowsUserPoolClient=True, AllowedOAuthScopes=["openid"],
-            CallbackURLs=[auth.CLI_REDIRECT], SupportedIdentityProviders=["COGNITO"])["UserPoolClient"]["ClientId"]
-        ssm.put_parameter(Name="/mi/cognito/cli-client", Value=client_id_cli, Type="String", Overwrite=True)
-    with contextlib.suppress(ClientError):  # an old pool gets the tenant attribute once
-        idp.add_custom_attributes(UserPoolId=pool, CustomAttributes=[{"Name": "tenant", "AttributeDataType": "String", "Mutable": True}])
+    pool = _user_pool(idp, ssm)
+    _app_client(idp, ssm, pool, identity_spec.CLIENT_PARAMETER, ClientName="mi-console",
+                ExplicitAuthFlows=["ALLOW_ADMIN_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"])  # password flow: local emulator only
+    _app_client(idp, ssm, pool, identity_spec.CLI_CLIENT_PARAMETER, ClientName="mi-cli", ExplicitAuthFlows=["ALLOW_REFRESH_TOKEN_AUTH"],
+                AllowedOAuthFlows=["code"], AllowedOAuthFlowsUserPoolClient=True, AllowedOAuthScopes=["openid"],
+                CallbackURLs=[identity_spec.CLI_REDIRECT], SupportedIdentityProviders=["COGNITO"])
+    with contextlib.suppress(ClientError):  # an old pool gets any attribute it lacks, once
+        idp.add_custom_attributes(UserPoolId=pool, CustomAttributes=_attribute_schema())
     for user in world.directory():
         if not _exists(idp.admin_get_user, UserPoolId=pool, Username=user["id"]):
             _create_user(idp, pool, user)
-        idp.admin_update_user_attributes(UserPoolId=pool, Username=user["id"], UserAttributes=[
-            {"Name": "custom:tenant", "Value": user.get("tenant", world.DEFAULT_TENANT)}])
-        idp.admin_set_user_password(UserPoolId=pool, Username=user["id"], Password=auth.DEMO_PASSWORD, Permanent=True)
+        with contextlib.suppress(ClientError):  # a tenant attribute that cannot change keeps its first value
+            idp.admin_update_user_attributes(UserPoolId=pool, Username=user["id"], UserAttributes=[
+                {"Name": "custom:tenant", "Value": user.get("tenant", world.DEFAULT_TENANT)}])
+        idp.admin_set_user_password(UserPoolId=pool, Username=user["id"], Password=_user_password(user["id"]), Permanent=True)
+
+
+def _user_password(user_id: str) -> str:
+    """The user's random password from Secrets Manager. The first run makes it. It is never in code or in git."""
+    vault = client("secretsmanager")
+    name = identity_spec.USER_SECRET_PREFIX + user_id
+    try:
+        return vault.get_secret_value(SecretId=name)["SecretString"]
+    except ClientError:
+        password = "Aa1!" + secrets.token_urlsafe(24)  # the prefix meets the policy, the rest is random
+        vault.create_secret(Name=name, SecretString=password, Description="Local demo password. Real deployments use Cognito and MFA.")
+        return password
 
 
 def _create_user(idp, pool: str, user: dict):

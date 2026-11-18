@@ -83,9 +83,11 @@ def test_the_database_is_private_encrypted_and_protected(stack):
 
 def test_a_user_cannot_write_their_own_role_or_tenant(stack):
     """Cedar reads custom:role and custom:tenant from the token, so the console client may write neither."""
-    (client,) = Template.from_stack(stack).find_resources("AWS::Cognito::UserPoolClient").values()
-    written = client["Properties"]["WriteAttributes"]
-    assert written and not any(a.startswith("custom:") for a in written)
+    clients = Template.from_stack(stack).find_resources("AWS::Cognito::UserPoolClient").values()
+    assert len(clients) == 2  # the console and the CLI
+    for client in clients:
+        written = client["Properties"]["WriteAttributes"]
+        assert written and not any(a.startswith("custom:") for a in written)
 
 
 def _services(t):
@@ -111,7 +113,7 @@ def test_blue_green_group(stack):
     (group,) = t.find_resources("AWS::CodeDeploy::DeploymentGroup").values()
     p = group["Properties"]
     assert p["DeploymentConfigName"] == "CodeDeployDefault.ECSCanary10Percent5Minutes"
-    assert p["AutoRollbackConfiguration"]["Events"] == ["DEPLOYMENT_FAILURE"]
+    assert p["AutoRollbackConfiguration"]["Events"] == ["DEPLOYMENT_FAILURE", "DEPLOYMENT_STOP_ON_ALARM"]
     assert p["BlueGreenDeploymentConfiguration"]["TerminateBlueInstancesOnDeploymentSuccess"]["Action"] == "TERMINATE"
     assert len(p["LoadBalancerInfo"]["TargetGroupPairInfoList"][0]["TargetGroups"]) == 2
     t.resource_count_is("AWS::ElasticLoadBalancingV2::Listener", 2)  # live and test

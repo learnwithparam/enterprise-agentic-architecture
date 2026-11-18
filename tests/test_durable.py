@@ -77,7 +77,7 @@ BRANDT, HALE = world.person("u-brandt"), world.person("u-hale")
 
 
 def signed(user):
-    return auth.reauthenticate(user, auth.DEMO_PASSWORD)
+    return auth.reauthenticate(user, auth.local_password(user["id"]))
 
 
 async def review_session(queue, body, **kw):

@@ -86,6 +86,8 @@ def escalate(case_id: str, waited_s: float) -> dict:
 def withdraw(block_id: str, user: dict, reason: str) -> dict:
     """A content owner pulls a block. Each case and planned touch that uses it is checked again."""
     block = store.get("mi-content", block_id)
+    if block is None:
+        raise LookupError(f"No block {block_id}")
     allowed, why = authz.user_can(user, "WithdrawContent", "Content", block_id, {"product": block["product"], "country": block["country"]})
     ledger.append({"type": "authz", "user": user["id"], "action": "WithdrawContent", "allowed": allowed, "reason": why, "block": block_id})
     if not allowed:

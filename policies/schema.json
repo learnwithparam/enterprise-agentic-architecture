@@ -1,0 +1,390 @@
+{
+ "": {
+  "entityTypes": {
+   "User": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "role": {
+       "type": "String",
+       "required": true
+      },
+      "country": {
+       "type": "String",
+       "required": true
+      },
+      "name": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Agent": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "kind": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Case": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "country": {
+       "type": "String",
+       "required": true
+      },
+      "route": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Inquiry": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "submitter": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Outreach": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "country": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Content": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "product": {
+       "type": "String",
+       "required": true
+      },
+      "country": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Country": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "country": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Tool": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "country": {
+       "type": "String",
+       "required": true
+      },
+      "product": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "McpTool": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "sensitive": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Ledger": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Proposal": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "DeadLetter": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   },
+   "Release": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
+   }
+  },
+  "actions": {
+   "CallTool": {
+    "appliesTo": {
+     "principalTypes": [
+      "Agent"
+     ],
+     "resourceTypes": [
+      "Tool"
+     ],
+     "context": {
+      "type": "Record",
+      "attributes": {
+       "case_country": {
+        "type": "String",
+        "required": true
+       },
+       "case_product": {
+        "type": "String",
+        "required": true
+       }
+      }
+     }
+    }
+   },
+   "CallMcpTool": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "McpTool"
+     ]
+    }
+   },
+   "ViewCaseDetail": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Case"
+     ]
+    }
+   },
+   "HandleSafetyCase": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Case"
+     ]
+    }
+   },
+   "ApproveReply": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Case"
+     ]
+    }
+   },
+   "RejectReply": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Case"
+     ]
+    }
+   },
+   "ViewInquiryText": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Inquiry"
+     ]
+    }
+   },
+   "SetAutonomy": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Country"
+     ]
+    }
+   },
+   "AuditLedger": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Ledger"
+     ]
+    }
+   },
+   "ErasePerson": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Ledger"
+     ]
+    }
+   },
+   "ResetDemo": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Ledger"
+     ]
+    }
+   },
+   "PromoteRelease": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Release"
+     ]
+    }
+   },
+   "ReplayDeadLetter": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "DeadLetter"
+     ]
+    }
+   },
+   "ViewDeadLetters": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "DeadLetter"
+     ]
+    }
+   },
+   "WithdrawContent": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Content"
+     ]
+    }
+   },
+   "ApproveOutreach": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Outreach"
+     ]
+    }
+   },
+   "RefreshProposals": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Proposal"
+     ]
+    }
+   }
+  }
+ }
+}

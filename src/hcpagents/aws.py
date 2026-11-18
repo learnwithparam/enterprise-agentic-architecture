@@ -1,6 +1,7 @@
-"""boto3 clients that talk to Floci, the local AWS copy.
+"""boto3 clients for AWS.
 
-In production the same code talks to real AWS. Unset MI_AWS_ENDPOINT and nothing else changes.
+Production reads no endpoint and talks to real AWS. A local run sets MI_AWS_ENDPOINT to Floci, the local AWS copy.
+MI_ENV is "local" only on a laptop. Anything else is production.
 """
 
 import os
@@ -8,7 +9,7 @@ from functools import cache
 
 import boto3
 
-ENDPOINT = os.environ.get("MI_AWS_ENDPOINT", "http://localhost:4566")
+ENDPOINT = os.environ.get("MI_AWS_ENDPOINT", "")
 REGION = os.environ.get("AWS_REGION", "eu-central-1")
 
 
@@ -27,3 +28,8 @@ def floci_up() -> bool:
         return True
     except Exception:
         return False
+
+
+def is_local() -> bool:
+    """True only when the run says so. Demo routes and password sign-in exist only then."""
+    return os.environ.get("MI_ENV", "production") == "local"
