@@ -9,7 +9,9 @@ const port = 8791;
 const base = `http://127.0.0.1:${port}`;
 const PASSWORD = execFileSync('uv', ['run', 'python', '-m', 'hcpagents.auth', 'u-raman'], { encoding: 'utf8', cwd: root }).trim(); // random per local user, in Secrets Manager
 const query = { case: '?id=inq-101', hcp: '?id=hcp-kaya' };
-const pages = readdirSync(new URL('../app', import.meta.url), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+const appDir = new URL('../app', import.meta.url);
+const folders = (dir) => readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory());
+const pages = folders(appDir).flatMap((e) => [e.name, ...folders(new URL(`../app/${e.name}`, import.meta.url)).map((n) => `${e.name}/${n.name}`)]);
 const routes = ['/', ...pages.map((p) => `/${p}${query[p] || ''}`)];
 
 const server = spawn('uv', ['run', 'uvicorn', 'hcpagents.api:app', '--port', String(port)], { cwd: root, env: { ...process.env, MI_WORKER: 'off' }, stdio: 'ignore' });

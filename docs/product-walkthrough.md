@@ -191,6 +191,21 @@ block marked Not current with who withdrew it, and the toast "Withdrawn. Drafts 
 
 ![Withdraw content](./product-walkthrough-shots/withdraw-content-desktop.webp)
 
+### Fact check
+
+**Go to** `/content/check`. **Paste** the copy of an email, pick the product and country, and press **Check**. **Show** each
+sentence with its label (Approved, Not approved, Withdrawn or Wrong country) and the summary line above them.
+
+**Say:** "Before anyone writes to a doctor, every sentence is matched to approved text that is current today."
+
+### Approve a planned email
+
+**Go to** `/hcp?id=hcp-kaya`. Under **Outreach coordinator**, each email the agent proposes has an **Approve and send**
+button. **Press** it as a person who may approve for that country and the email goes out. For anyone else the console
+says plainly that they may not, and if a rule now holds the touch it says why it was not sent.
+
+**Say:** "The agent proposes, a person sends, and the rules run again at the moment of sending."
+
 ### Approval blocked at send
 
 **Switch persona** to Dr. Lena Brandt, German reviewer. **Go to** `/case?id=inq-103` and press **Approve and

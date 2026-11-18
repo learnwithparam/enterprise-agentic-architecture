@@ -12,6 +12,7 @@ const NAV = [
   ['Review', '/review'],
   ['HCP 360', '/hcp'],
   ['Content', '/content'],
+  ['Fact check', '/content/check'],
   ['Agents', '/agents'],
   ['Releases', '/releases'],
   ['Proof', '/proof'],

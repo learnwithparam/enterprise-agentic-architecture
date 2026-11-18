@@ -86,10 +86,25 @@ def accept(tenant: str, channel: str, raw: dict, via: str) -> dict:
         if new:
             from hcpagents import events  # events imports infra, which imports this module
             events.publish("InteractionReceived", {"interaction": row_id}, key=f"ix-{row_id}")
-    if record.kind == "question":
-        from hcpagents import ingest_cases  # a late import, as above
+    result = {"id": row_id, "duplicate": new is None}
+    if record.kind == "question" and not try_open_case(tenant, channel, row_id, record):
+        result["case"] = "pending"
+    return result
+
+
+def try_open_case(tenant: str, channel: str, row_id: str, record: Record) -> bool:
+    """Open the case for a question. If that fails, keep the row, note it in the ledger and say False.
+
+    The same event again, or the next batch import, tries once more. A case that exists is never opened twice.
+    """
+    from hcpagents import ingest_cases, ledger  # late imports, as above
+    try:
         ingest_cases.open_case(tenant, channel, row_id, record.model_dump(mode="json"))
-    return {"id": row_id, "duplicate": new is None}
+    except Exception as error:
+        with world.as_tenant(tenant):
+            ledger.append({"type": "case_open_failed", "row": row_id, "error": type(error).__name__})
+        return False
+    return True
 
 
 def landing() -> None:

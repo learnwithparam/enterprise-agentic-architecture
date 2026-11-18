@@ -244,14 +244,17 @@ promotional content generation.
 | Planned touches held for cap, consent or open case | Unknown | Reported weekly to brand teams |
 | Model cost per case | Not applicable | Under one cent |
 
-**Known limits of this build.** Each line is one of the limits in [what Floci covers](./floci-support.md); nothing else is left out.
+**Known limits of this build.** Each line is one of the limits in [what Floci covers](./floci-support.md). `tests/test_known_limits.py` checks that both pages list the same limits.
 
 - A live Bedrock model answer needs an AWS account. Floci returns a stub, so the labs prove failover and the request translation, not the model's words.
 - Cognito has no device-code grant, here or on AWS. The `hcp` CLI signs in with the authorization code flow and PKCE against a loopback redirect.
-- The CDK stack, with its migration task, blue/green deploy and second region, is synthesized and checked by tests but never deployed from here: Floci does not run the RDS, load balancer and CodeDeploy parts the stack needs.
+- The local Cognito pool has no MFA, so the MFA path is proven with a stub client. The real flow needs an AWS account.
+- Verified Permissions validates policies STRICT against `policies/schema.json`. The real service has never checked that schema, so the first `cdk deploy` is its test.
+- The dead-letter alarm exists, but failed events are parked in Postgres. Nothing feeds the SQS queue yet.
+- The CDK stack, with its migration task, blue/green deploy, WAF and alarms, is synthesized and checked by tests but never deployed from here: Floci does not run the RDS, load balancer and CodeDeploy parts the stack needs.
 
 **Built, not left out.** The `hcp_app` password lives only in Secrets Manager: the app reads it at boot and the
-migration sets it on the role, so no file or environment variable carries it. The console is a static export, so
+migration sets it on the role, so no file or environment variable carries it. Local user passwords live there too. The console is a static export, so
 the API sets its content security policy, and `web/scripts/check-csp.mjs` loads every route and fails on a violation.
 
 ## Part B: the slice

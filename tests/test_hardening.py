@@ -101,6 +101,16 @@ def test_the_load_balancer_sits_behind_a_firewall_with_common_rules_and_a_rate_c
     assert "LB" in json.dumps(link["Properties"]["ResourceArn"])
 
 
+def test_a_big_body_is_blocked_everywhere_except_the_signed_webhooks(template):
+    (acl,) = template.find_resources("AWS::WAFv2::WebACL").values()
+    rule = next(r for r in acl["Properties"]["Rules"] if r["Name"] == "BigBodyOutsideHooks")
+    assert "Block" in rule["Action"]
+    first, second = rule["Statement"]["AndStatement"]["Statements"]
+    assert first["SizeConstraintStatement"]["Size"] == 8192
+    hook = second["NotStatement"]["Statement"]["ByteMatchStatement"]
+    assert hook["SearchString"] == "/hooks/" and hook["PositionalConstraint"] == "STARTS_WITH"
+
+
 @pytest.mark.floci
 def test_withdrawing_an_unknown_block_is_a_404_not_a_crash():
     client = TestClient(api.app)

@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from hcpagents import api_agents, api_cases, api_check, api_content, api_outreach, api_proof, auth, aws, db, durable, gateway, ingest, mcp_server, ratelimit, v1, world
+from hcpagents import api_agents, api_cases, api_check, api_config, api_content, api_outreach, api_proof, auth, aws, db, durable, gateway, ingest, mcp_server, ratelimit, v1, world
 
 
 @contextlib.asynccontextmanager
@@ -43,7 +43,7 @@ app = FastAPI(title="Medical information platform", lifespan=lifespan)
 DIST = world.ROOT / "web" / "dist"
 
 
-PUBLIC = {"/api/login", "/api/login-options", "/api/health"}
+PUBLIC = {"/api/login", "/api/login-options", "/api/health", "/api/config"}
 PROTECTED = ("/api/", "/v1/", "/mcp")
 MACHINE = ("/v1/", "/mcp")
 
@@ -132,13 +132,30 @@ def health():
     return {"status": "ok"}
 
 
+CONSOLE = ratelimit.SlidingWindow(int(os.environ.get("MI_API_PER_MIN", "120")))
+
+
+def console_limit(request: Request) -> None:
+    """Each signed in user gets a budget of console calls per minute. A noisy user cannot slow the others."""
+    user = getattr(request.state, "user", None)
+    key = ratelimit.caller_address(request)
+    if user:
+        key = f"{user['tenant']}:{user['id']}"
+    wait = CONSOLE.hit(key)
+    if wait:
+        raise HTTPException(429, "Too many requests", headers={"Retry-After": str(wait)})
+
+
 def add_routes(router: APIRouter) -> None:
-    """Put a route module's routes straight on the app, so each shows up in `app.routes`."""
+    """Put a route module's routes straight on the app, so each shows up in `app.routes`. Console routes get the limit."""
     for route in router.routes:
-        app.add_api_route(route.path, route.endpoint, methods=sorted(route.methods))
+        guards = []
+        if route.path.startswith("/api/"):
+            guards = [Depends(console_limit)]
+        app.add_api_route(route.path, route.endpoint, methods=sorted(route.methods), dependencies=guards)
 
 
-for routes in (api_cases.router, api_check.router, api_content.router, api_outreach.router, *api_proof.routers(), api_agents.router):
+for routes in (api_cases.router, api_check.router, api_config.router, api_content.router, api_outreach.router, *api_proof.routers(), api_agents.router):
     add_routes(routes)
 app.include_router(v1.router)
 app.mount("/mcp", mcp_server.mount)
@@ -162,8 +179,11 @@ def content_security_policy(file: Path) -> str:
     So an injected script tag does not run. Styles allow inline because React writes style attributes.
     """
     scripts = " ".join(("'self'", *_inline_script_hashes(file, file.stat().st_mtime)))
+    connect = "'self'"
+    if not aws.is_local():
+        connect += f" https://cognito-idp.{aws.REGION}.amazonaws.com"
     return (f"default-src 'self'; script-src {scripts}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+            f"font-src 'self'; connect-src {connect}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
 
 
 if DIST.exists():

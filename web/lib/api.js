@@ -31,16 +31,21 @@ export const who = () => read(localStorage, WHO);
 export const signedIn = () => Boolean(who() && read(sessionStorage, tokenKey(who())));
 
 /** Sign in with a password. Throws ApiError(401) when it is wrong. */
-export async function login(user, password) {
+export async function login(user, password, mfaCode) {
   const r = await fetch('/api/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user, password }),
+    body: JSON.stringify({ user, password, mfa_code: mfaCode || undefined }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new ApiError(r.status, data.detail || 'Sign in failed');
+  storeToken(user, data.token);
+}
+
+/** Remember a token the browser got from the identity provider itself (production sign-in). */
+export function storeToken(user, token) {
   write(localStorage, WHO, user);
-  write(sessionStorage, tokenKey(user), data.token);
+  write(sessionStorage, tokenKey(user), token);
 }
 
 export function logout() {

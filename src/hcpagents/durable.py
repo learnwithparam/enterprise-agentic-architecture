@@ -27,7 +27,7 @@ def queue_for(tenant: str) -> str:
 
 STEWARD_ID = "content-steward"
 ACTIVITIES = [activities.open_case, activities.run_step, activities.close_case, activities.decide_case, activities.escalate_case,
-              activities.steward_tick, activities.import_batch]
+              activities.steward_tick, activities.handoff_tick, activities.import_batch]
 
 
 async def connect() -> Client:

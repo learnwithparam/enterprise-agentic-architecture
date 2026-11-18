@@ -9,7 +9,8 @@ The platform runs its AWS code against [Floci](https://floci.io/) 2.3.0 on `loca
 | ECS | Task definitions, migration task | Registers task definitions | `register-task-definition` returns the ARN in both regions |
 | CodeDeploy | Blue/green deploy group | Lists applications | `list-applications` answers |
 | Cognito | Sign-in, tenant claim | Pools, clients, custom attributes, JWKS, OpenID configuration, authorize and token endpoints | `/<pool>/.well-known/jwks.json` returns an RSA key set; `admin-create-user` accepts `custom:tenant` |
-| Secrets Manager | The `hcp_app` password | Create and read | `create-secret` then `get-secret-value` |
+| Secrets Manager | The `hcp_app` password and each local user password | Create and read | `create-secret` then `get-secret-value` |
+| SES | Email delivery of approved replies | Sends and keeps an outbox | `send_email` returns a MessageId and `/_aws/ses` lists the message |
 | SQS | One work queue per tenant | Create and list | `create-queue` |
 | S3 | Ledger bucket | Create and list | `list-buckets` |
 | Verified Permissions | Cedar policies | Policy stores | `list-policy-stores` answers |
@@ -18,4 +19,7 @@ The platform runs its AWS code against [Floci](https://floci.io/) 2.3.0 on `loca
 
 - A live Bedrock model answer needs an AWS account. Floci returns a stub, so the labs prove failover and the request translation, not the model's words.
 - Cognito has no device-code grant, here or on AWS. The `hcp` CLI signs in with the authorization code flow and PKCE against a loopback redirect.
-- The CDK stack, with its migration task, blue/green deploy and second region, is synthesized and checked by tests but never deployed from here: Floci does not run the RDS, load balancer and CodeDeploy parts the stack needs.
+- The local Cognito pool has no MFA, so the MFA path is proven with a stub client. The real flow needs an AWS account.
+- Verified Permissions validates policies STRICT against `policies/schema.json`. The real service has never checked that schema, so the first `cdk deploy` is its test.
+- The dead-letter alarm exists, but failed events are parked in Postgres. Nothing feeds the SQS queue yet.
+- The CDK stack, with its migration task, blue/green deploy, WAF and alarms, is synthesized and checked by tests but never deployed from here: Floci does not run the RDS, load balancer and CodeDeploy parts the stack needs.

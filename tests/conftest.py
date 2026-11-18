@@ -1,8 +1,11 @@
 """A case and a reviewer's wait are Temporal workflows that outlive a test, so each test starts with none open."""
 
 import asyncio
+import os
 
 import pytest
+
+os.environ.setdefault("MI_API_PER_MIN", "100000")  # tests make many console calls
 
 
 async def _stop_open_workflows() -> None:

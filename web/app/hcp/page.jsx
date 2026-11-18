@@ -2,7 +2,8 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useApi } from '@/lib/hooks';
+import { api } from '@/lib/api';
+import { toast, useApi } from '@/lib/hooks';
 import { when, words } from '@/lib/format';
 import { Await, BlockChip, CaseLink, ChannelChip, Chip, PageHead, Section } from '@/components/ui';
 
@@ -21,14 +22,25 @@ function People({ selected }) {
   );
 }
 
-function Plan({ id }) {
+function Plan({ id, planned }) {
   const plan = useApi(`/api/hcps/${encodeURIComponent(id)}/outreach`);
+  const kinds = Object.fromEntries(planned.map((p) => [p.id, p.kind]));
+  async function approve(touch) {
+    try {
+      await api(`/api/outreach/${encodeURIComponent(id)}/approve`, { touch });
+      toast('Approved and sent.');
+      plan.reload();
+    } catch (e) {
+      toast(e.status === 403 ? `You may not approve this. ${e.message}` : e.status === 409 ? `Not sent. ${e.message}` : e.message, 'err');
+    }
+  }
   return (
     <div id="outreach"><h2 className="sec gap">Outreach coordinator</h2>
       <p className="sub">The agent that decides the next contact. It proposes a touch for a person to send or holds it, and writes the reason with its source.</p>
       <Await state={plan}>{(ds) => ds.length ? ds.map((d) => (
         <p key={d.id}><b className="num">{d.on}</b> <Chip tone={d.action === 'hold' ? 'red' : 'green'}>{d.action === 'hold' ? 'Hold' : 'Propose'}</Chip>
-          {d.reasons.map((r) => <span key={r.rule} className="muted"> {r.why}{r.source ? ` (${r.source})` : ''}.</span>)}</p>
+          {d.reasons.map((r) => <span key={r.rule} className="muted"> {r.why}{r.source ? ` (${r.source})` : ''}.</span>)}
+          {d.action === 'propose' && kinds[d.id] === 'email' && <> <button className="btn sm" onClick={() => approve(d.id)}>Approve and send</button></>}</p>
       )) : <p className="empty">Nothing to coordinate.</p>}</Await></div>
   );
 }
@@ -55,7 +67,7 @@ function Detail({ id }) {
                 </div>)) : <p className="empty">Nothing planned.</p>}
               <h2 className="sec gap">Open medical cases</h2>
               {v.open_cases.length ? v.open_cases.map((c) => <p key={c.id}><CaseLink id={c.id} /> <span className="muted">{c.product}, {words(c.status)}</span></p>) : <p className="empty">None.</p>}
-              <Plan id={id} />
+              <Plan id={id} planned={v.planned} />
             </div>
             <div>
               <h2 className="sec">Timeline</h2><p className="sub">Every touch from every channel, newest first. Promotional touches count toward the cap.</p>

@@ -317,9 +317,24 @@ class Platform(cdk.Stack):
             name="PerAddressCap", priority=2, action=wafv2.CfnWebACL.RuleActionProperty(block={}), visibility_config=visible("PerAddressCap"),
             statement=wafv2.CfnWebACL.StatementProperty(rate_based_statement=wafv2.CfnWebACL.RateBasedStatementProperty(limit=1000, aggregate_key_type="IP")))
         acl = wafv2.CfnWebACL(self, "Firewall", scope="REGIONAL", default_action=wafv2.CfnWebACL.DefaultActionProperty(allow={}),
-                              visibility_config=visible("Firewall"), rules=[common, per_address])
+                              visibility_config=visible("Firewall"), rules=[common, per_address, self.big_body_outside_hooks(visible)])
         wafv2.CfnWebACLAssociation(self, "FirewallOnLoadBalancer", resource_arn=api.load_balancer.load_balancer_arn, web_acl_arn=acl.attr_arn)
         return acl
+
+    def big_body_outside_hooks(self, visible) -> wafv2.CfnWebACL.RuleProperty:
+        """The 8 KB body cap still applies everywhere except the signed channel webhooks."""
+        keep = [wafv2.CfnWebACL.TextTransformationProperty(priority=0, type="NONE")]
+        too_big = wafv2.CfnWebACL.StatementProperty(size_constraint_statement=wafv2.CfnWebACL.SizeConstraintStatementProperty(
+            comparison_operator="GT", size=8192, text_transformations=keep,
+            field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(body=wafv2.CfnWebACL.BodyProperty(oversize_handling="MATCH"))))
+        is_hook = wafv2.CfnWebACL.StatementProperty(byte_match_statement=wafv2.CfnWebACL.ByteMatchStatementProperty(
+            search_string="/hooks/", positional_constraint="STARTS_WITH", text_transformations=keep,
+            field_to_match=wafv2.CfnWebACL.FieldToMatchProperty(uri_path={})))
+        not_hook = wafv2.CfnWebACL.StatementProperty(not_statement=wafv2.CfnWebACL.NotStatementProperty(statement=is_hook))
+        both = wafv2.CfnWebACL.AndStatementProperty(statements=[too_big, not_hook])
+        return wafv2.CfnWebACL.RuleProperty(
+            name="BigBodyOutsideHooks", priority=3, action=wafv2.CfnWebACL.RuleActionProperty(block={}), visibility_config=visible("BigBodyOutsideHooks"),
+            statement=wafv2.CfnWebACL.StatementProperty(and_statement=both))
 
     def blue_green(self, api: patterns.ApplicationLoadBalancedFargateService, alarms: list[cloudwatch.Alarm]) -> codedeploy.EcsDeploymentGroup:
         """CodeDeploy shifts 10 percent of traffic to the new task set, waits five minutes, then the rest. A failed

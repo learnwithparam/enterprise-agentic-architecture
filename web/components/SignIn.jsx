@@ -2,14 +2,27 @@
 import { useEffect, useState } from 'react';
 import { login } from '@/lib/api';
 import { ROLE } from '@/lib/format';
+import CognitoSignIn from './CognitoSignIn';
 import { Failure } from './ui';
 
 /** Pick a tenant, then a person in it, then enter that person's password. The server checks it. */
 export default function SignIn({ onSignedIn }) {
+  const [config, setConfig] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    fetch('/api/config').then((r) => r.json()).then(setConfig).catch(setError);
+  }, []);
+  if (!config) return <div className="frame"><main>{error ? <Failure error={error} /> : <p className="empty">Loading</p>}</main></div>;
+  if (config.mode === 'cognito') return <CognitoSignIn config={config} onSignedIn={onSignedIn} />;
+  return <LocalSignIn onSignedIn={onSignedIn} />;
+}
+
+function LocalSignIn({ onSignedIn }) {
   const [options, setOptions] = useState(null);
   const [tenant, setTenant] = useState('quillon');
   const [user, setUser] = useState('');
   const [error, setError] = useState(null);
+  const [mfa, setMfa] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -27,10 +40,12 @@ export default function SignIn({ onSignedIn }) {
     setBusy(true);
     setError(null);
     try {
-      await login(chosen.id, new FormData(ev.target).get('password'));
+      const form = new FormData(ev.target);
+      await login(chosen.id, form.get('password'), form.get('mfa_code'));
       onSignedIn();
     } catch (e) {
       setError(e);
+      setMfa((on) => on || /MFA/.test(e.message));
       setBusy(false);
     }
   }
@@ -61,6 +76,8 @@ export default function SignIn({ onSignedIn }) {
             )}
             <div className="fld w"><label htmlFor="password">Password</label>
               <input id="password" name="password" type="password" autoComplete="current-password" required /></div>
+            {mfa && <div className="fld w"><label htmlFor="mfa">Code from your authenticator app</label>
+              <input id="mfa" name="mfa_code" inputMode="numeric" autoComplete="one-time-code" /></div>}
             {error && <div className="fld w"><Failure error={error} /></div>}
             <div className="fld w"><button className="btn dark" type="submit" disabled={busy}>Sign in</button></div>
           </form>

@@ -129,7 +129,7 @@ class ReviewWorkflow:
 @workflow.defn
 class ContentStewardWorkflow:
     """Always on, one per platform, so nothing goes out on old content.
-    It wakes often and passes pulled content to the steward task.
+    It wakes often. It passes pulled content to the steward task and runs the handoff teams.
     Then it restarts its history with continue as new."""
 
     def __init__(self) -> None:
@@ -144,6 +144,7 @@ class ContentStewardWorkflow:
         for _ in range(STEWARD_CYCLES):
             out = await workflow.execute_activity("steward_tick", {}, start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
             self.invalidated += len(out["cases"])
+            await workflow.execute_activity("handoff_tick", {}, start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
             await workflow.sleep(timedelta(seconds=args.get("poll_seconds", STEWARD_POLL_S)))
         workflow.continue_as_new(args)
 

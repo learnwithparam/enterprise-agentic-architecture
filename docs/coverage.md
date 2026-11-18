@@ -115,8 +115,15 @@ A dash means the requirement has no screen or no lab of its own. Every row has a
 | Local demo passwords are random per user | adr/0010-signed-tokens-and-server-side-tenant.md | / | - | tests/test_auth_parity.py::test_each_local_user_has_their_own_random_password |
 | Demo routes exist only on a local run | architecture-walkthrough.md | /proof | - | tests/test_hardening.py::test_the_demo_routes_exist_only_when_the_run_is_local |
 | Production uses real AWS unless told otherwise | adr/0003-floci-locally-bedrock-in-production.md | - | - | tests/test_hardening.py::test_production_names_no_aws_endpoint_so_it_talks_to_real_aws |
+| Console routes are rate limited per user | adr/0028-machine-interfaces-share-one-front-door.md | - | - | tests/test_console_ratelimit.py::test_a_user_over_the_console_limit_gets_429 |
+| The sign-in screen reads its mode from a public config route | architecture-walkthrough.md | / | - | tests/test_console_config.py::test_the_sign_in_screen_can_read_the_config_without_a_token |
+| The page policy allows Cognito only outside a local run | architecture-walkthrough.md | / | - | tests/test_console_config.py::test_the_page_policy_allows_cognito_only_outside_a_local_run |
+| Handoff teams run on their own schedule | architecture-walkthrough.md | /review | - | tests/test_handoff_schedule.py::test_the_handoff_task_drains_a_review_event_into_the_reviewer_queue |
 | Sign-in and channel webhooks are rate limited | adr/0028-machine-interfaces-share-one-front-door.md | - | - | tests/test_hardening.py::test_a_caller_over_the_limit_gets_429_on_sign_in_and_on_the_webhook |
 | Cedar is validated strictly against a schema | adr/0010-signed-tokens-and-server-side-tenant.md | - | - | tests/test_hardening.py::test_the_stack_validates_cedar_strictly_against_a_schema_that_names_every_action |
 | Alarms on 5xx and parked events stop a deploy | architecture-walkthrough.md | - | - | tests/test_hardening.py::test_the_stack_alarms_on_5xx_and_parked_events_and_a_deploy_rolls_back_on_them |
 | A firewall guards the load balancer | architecture-walkthrough.md | - | - | tests/test_hardening.py::test_the_load_balancer_sits_behind_a_firewall_with_common_rules_and_a_rate_cap |
+| A big request body is blocked everywhere except the signed webhooks | architecture-walkthrough.md | - | - | tests/test_hardening.py::test_a_big_body_is_blocked_everywhere_except_the_signed_webhooks |
 | Withdrawing an unknown block is a 404 | architecture-walkthrough.md | /content | - | tests/test_hardening.py::test_withdrawing_an_unknown_block_is_a_404_not_a_crash |
+| A question whose case cannot open is kept, logged and retried | adr/0021-channels-arrive-signed-and-land-once.md | - | - | tests/test_ingest_cases.py::test_a_question_whose_case_cannot_open_is_kept_logged_and_opened_on_a_repeat |
+| The limits in the case study and the Floci page agree | floci-support.md | - | - | tests/test_known_limits.py::test_both_pages_list_the_same_limits |

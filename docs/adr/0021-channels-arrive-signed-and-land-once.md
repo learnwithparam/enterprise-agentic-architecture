@@ -22,6 +22,13 @@ event twice. Some channels push as it happens; others export a file at night.
 - **Raw first.** A row keeps the sender's person id (`source_id`) and no `hcp_id`. Linking it to a
   person is identity resolution (P4.2).
 
+## What a channel vouches for
+
+A signed webhook proves the message came from that channel's backend. The sender id is that backend's
+claim, not a fact the platform checked. The reply always goes to the email on file for the matched
+doctor, never to an address the sender supplied. A portal must verify the login before it sends an
+email as the source id.
+
 ## Consequences
 
 - A leaked URL is useless without the secret, and a captured request stops working after five minutes.
