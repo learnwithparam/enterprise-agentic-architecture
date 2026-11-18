@@ -53,3 +53,10 @@ In `src/hcpagents/sentinel.py`, change `hits = rules.safety_screen(row["body"]) 
 ## What production adds
 
 Per tenant queues, a dead letter queue for events that keep failing, and an alarm on the dead letters.
+
+## New words
+
+- **sentinel**: A watcher that reads every channel for safety signals.
+- **steward**: A watcher that keeps drafts in step with content changes.
+- **idempotent**: Safe to repeat, so the same event gives one result.
+- **dead letter queue**: A holding place for events that keep failing.

@@ -1,16 +1,16 @@
 # Prove the audit trail with a hash chain
 
 **The job:** an inspector asks how inquiry inq-105, a reported rash, was handled six months ago. Compliance
-must show the route it took, who touched it and that nobody changed the record afterwards, including
-someone with database access.
+must show the route it took and who touched it. It must also show that nobody changed the record
+afterwards, even someone with database access.
 
-**Before:** an audit table. Anyone who can write to it can change a row, and the changed row looks exactly
-like the real one.
+**Before:** an audit table. Anyone who can write to it can change a row. The changed row looks exactly like
+the real one.
 
-**After:** each ledger entry is hashed together with the hash before it (`ledger.digest`), so editing any
-past entry breaks the chain at that entry. Every tenth hash is signed with a KMS key, and every entry is
-also written to an S3 bucket under Object Lock in compliance mode for ten years. An insider who rewrites
-the chain from the edit onwards still cannot forge the signatures or delete the archived copies.
+**After:** each ledger entry is hashed together with the hash before it (`ledger.digest`). So editing any
+past entry breaks the chain at that entry. Every tenth hash is signed with a KMS key. Every entry is also
+written to an S3 bucket under Object Lock in compliance mode for ten years. An insider may rewrite the
+chain from the edit onwards. That person still cannot forge the signatures or delete the archived copies.
 
 ## Prerequisites
 
@@ -60,5 +60,12 @@ or reordered without changing any hash. Put it back.
 
 ## What production adds
 
-The same code against DynamoDB, KMS and S3 in the client's account, with the archive bucket in a separate
-account the platform team cannot administer.
+The same code runs against DynamoDB, KMS and S3 in the client's account. The archive bucket sits in a
+separate account that the platform team cannot administer.
+
+## New words
+
+- **hash chain**: A list where each entry holds a fingerprint of the one before it.
+- **ledger**: The saved record of what the system did.
+- **KMS**: The AWS service that holds signing keys.
+- **Object Lock**: An S3 setting that stops anyone from deleting a file for a set time.

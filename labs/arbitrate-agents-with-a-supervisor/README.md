@@ -53,3 +53,10 @@ test fails: a campaign planned earlier would now silence a doctor's own question
 
 The outreach coordinator feeds the supervisor from the HCP 360 record, an open medical case blocks
 promotion outright, and every held touch carries its rule and source interactions on the ledger.
+
+## New words
+
+- **supervisor**: The code that picks which of two clashing proposals goes first.
+- **proposal**: A planned touch to a doctor, saved as a row.
+- **promotional**: A touch that sells, not one that answers a doctor's own question.
+- **held**: Put on hold, not deleted.

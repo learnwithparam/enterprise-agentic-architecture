@@ -1,16 +1,16 @@
 # Ground replies with approved blocks
 
 **The job:** a German dermatologist asks how to dose Veltrona. The reply must say only what Medical, Legal
-and Regulatory approved for Germany, in the version that is approved today, and an auditor must be able to
-point at any sentence and find its approval number.
+and Regulatory approved for Germany. It must use the version that is approved today. An auditor must be
+able to point at any sentence and find its approval number.
 
-**Before:** the model writes the reply from retrieved passages. It reads well, and nobody can prove that
-the sentence about food was in the approved text and not written by the model.
+**Before:** the model writes the reply from retrieved passages. It reads well. Nobody can prove that the
+sentence about food was in the approved text and not written by the model.
 
-**After:** the model picks block ids. `grounding.compose` places those blocks verbatim between fixed
+**After:** the model picks block ids. `grounding.compose` places those blocks word for word between fixed
 templates, the safety information and the AI disclosure. `grounding.verify` splits the result into
-sentences and requires each one to match a sentence in a current approved block for that product and
-country. A changed word, a withdrawn block or another country's label fails the check.
+sentences. Each one must match a sentence in a current approved block for that product and country. A
+changed word fails the check. So does a withdrawn block or another country's label.
 
 ## Prerequisites
 
@@ -57,5 +57,12 @@ counts as traced. Put the line back. `scripts/mutate.py` makes this same change 
 
 ## What production adds
 
-The block store is the client's content management system, read through an adapter that keeps block id,
+The block store is the client's content management system. An adapter reads it and keeps the block id,
 version and approval reference. The check is the same code.
+
+## New words
+
+- **grounding**: Making sure every sentence of a reply comes from approved text.
+- **block**: A piece of approved text with an id and a version.
+- **verbatim**: Word for word, with no change.
+- **MLR**: The Medical, Legal and Regulatory review that approves content.

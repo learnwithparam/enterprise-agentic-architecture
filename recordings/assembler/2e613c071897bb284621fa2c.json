@@ -25,7 +25,7 @@
    "input": {
     "product": "OMB",
     "country": "JP",
-    "query": "drug-drug interaction with CYP3A4 blockers macrolide antibiotic coadministration"
+    "query": "drug-drug interaction with CYP3A4 inhibitor or concomitant medicines that affect metabolism"
    },
    "allowed": true,
    "reason": "Verified Permissions: ALLOW (agents.cedar)",
@@ -37,21 +37,21 @@
  ],
  "usage": {
   "input_tokens": 6,
-  "output_tokens": 471,
-  "cache_read_input_tokens": 4389,
-  "cache_creation_input_tokens": 1432
+  "output_tokens": 461,
+  "cache_read_input_tokens": 4380,
+  "cache_creation_input_tokens": 1482
  },
  "model_usage": {
   "claude-haiku-5-5": {
    "inputTokens": 6,
-   "outputTokens": 471
+   "outputTokens": 461
   }
  },
- "cost_usd": 0.000566,
+ "cost_usd": 0.000571,
  "agent": "assembler",
  "key": "2e613c071897bb284621fa2c",
  "prompt_version": "2026-10-29.1",
  "model": "claude-haiku-5-5",
  "user_prompt": "{\"product\": \"OMB\", \"country\": \"JP\", \"questions\": [{\"text\": \"Are there interactions between Ombrexa and strong CYP3A4 inhibitors such as clarithromycin?\", \"topic\": \"interactions\"}], \"retry\": {\"not_covered\": [\"Are there interactions between Ombrexa and strong CYP3A4 inhibitors such as clarithromycin?\"], \"note\": \"Search again for these using different words from the question.\"}}",
- "recorded_at": "2026-11-02T11:58:56+00:00"
+ "recorded_at": "2026-11-18T11:49:53+00:00"
 }

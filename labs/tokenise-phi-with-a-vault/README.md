@@ -65,3 +65,10 @@ Step 1 fails: a phone number would reach the model. Put it back.
 
 The vault is a row in the tenant's own table, sealed with AES-GCM under a key kept in SSM for that case.
 Delete the key and the vault cannot be read. A second tenant with the same case id gets nothing back.
+
+## New words
+
+- **PHI**: Private health data, such as a name or phone number.
+- **tokenise**: Swap a private value for a placeholder like [NAME_1].
+- **vault**: The sealed store that holds the real values for one case.
+- **AES-GCM**: A way to lock data so nobody can read or change it without the key.

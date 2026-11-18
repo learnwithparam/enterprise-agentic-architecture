@@ -1,14 +1,15 @@
 # Route inquiries with a routing table
 
 **The job:** Quillon's medical information service gets questions from doctors on five channels. Each one
-must reach the team that owns it: pharmacovigilance for a possible side effect, Medical for an off-label
-question, a reviewer for anything not cleared, and the doctor directly only when every check passed.
+must reach the team that owns it. Pharmacovigilance gets a possible side effect. Medical gets an off-label
+question. A reviewer gets anything not cleared. The doctor gets a direct reply only when every check
+passed.
 
-**Before:** a model decides where a message goes. Nobody can say what it will decide next time, and an
-adverse event phrased as a dosing question can be answered instead of reported.
+**Before:** a model decides where a message goes. Nobody can say what it will decide next time. An adverse
+event phrased as a dosing question can be answered instead of reported.
 
-**After:** the agents establish facts (`ae`, `in_scope`, `grounded` and so on) and plain code walks a fixed
-table, first match wins. Compliance reads the table; tests walk it.
+**After:** the agents establish facts (`ae`, `in_scope`, `grounded` and so on). Plain code walks a fixed
+table, and the first match wins. Compliance reads the table. Tests walk it.
 
 ## Prerequisites
 
@@ -59,3 +60,10 @@ be declined, and the legal report would never be filed. Put the row back.
 The same `asl()` output is deployed as the Step Functions state machine, with each node a Lambda task.
 `tests/test_graph.py` runs one case per rule through Step Functions on Floci and checks it routes like
 Python.
+
+## New words
+
+- **routing table**: A fixed list of rules where the first match wins.
+- **pharmacovigilance**: The team that tracks drug side effects.
+- **adverse event**: A side effect a patient may have had.
+- **Step Functions**: The AWS service that runs a fixed flow of steps.

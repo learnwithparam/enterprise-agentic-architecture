@@ -3,7 +3,7 @@
 import json
 import uuid
 
-from hcpagents import agent_caps, agent_context, agent_redraft, agents, authz, db, grounding, ledger, plan, rules, store, world
+from hcpagents import agent_caps, agent_context, agent_redraft, agents, authz, db, grounding, ledger, phi_vault, plan, rules, store, world
 
 
 def autonomy_setting(country: str) -> dict:
@@ -98,7 +98,7 @@ class Case:
         text, note = agent_context.model_text(self.inq)
         if note["dropped"]:
             self.audit({"type": "context_trimmed", **note})
-        return text
+        return phi_vault.tokenise(text, self.doc["id"])
 
     # ------------------------------------------------------------ graph nodes
 
@@ -115,8 +115,9 @@ class Case:
         hits = rules.safety_screen(text)
         out = await self.agent("safety", f"{untrusted_header()}\n{agents.untrusted(self.thread_text())}")
         for signal in out["signals"]:
-            hits.append({"kind": signal["kind"].replace("_", " "), "quote": signal["quote"], "source": "safety agent",
-                         "quote_found": signal["quote"].lower() in text.lower()})
+            quote = phi_vault.restore(signal["quote"], self.doc["id"])
+            hits.append({"kind": signal["kind"].replace("_", " "), "quote": quote, "source": "safety agent",
+                         "quote_found": quote.lower() in text.lower()})
         self.doc["signals"] = hits
         return {"facts": {"ae": bool(hits)}, "detail": hits}
 

@@ -2,7 +2,7 @@
  "output": {
   "answers": [],
   "uncovered": [
-   "Is Ombrexa better than tiotropium for my COPD patients? (No approved block compares Ombrexa with tiotropium or states relative efficacy. Two searches returned only dosing, inhaler care, safety, and interaction blocks, none of which answer the comparison.)"
+   "Is Ombrexa better than tiotropium for my COPD patients? (No returned block compares Ombrexa with tiotropium or states whether it is superior. The returned blocks cover safety information (not for sudden breathing problems), dosing (200 mcg once daily), inhaler cleaning, and CYP3A4 interactions.)"
   ]
  },
  "tool_calls": [
@@ -21,41 +21,25 @@
     "OMB-US-CARE",
     "OMB-US-INTER"
    ]
-  },
-  {
-   "tool": "mcp__mi__search_approved_content",
-   "input": {
-    "product": "OMB",
-    "country": "US",
-    "query": "head-to-head comparison with Spiriva or other LAMA bronchodilators efficacy"
-   },
-   "allowed": true,
-   "reason": "Verified Permissions: ALLOW (agents.cedar)",
-   "returned": [
-    "OMB-US-CARE",
-    "OMB-US-INTER",
-    "ISI-OMB-US",
-    "OMB-US-DOSE"
-   ]
   }
  ],
  "usage": {
-  "input_tokens": 6,
-  "output_tokens": 599,
-  "cache_read_input_tokens": 4381,
-  "cache_creation_input_tokens": 1856
+  "input_tokens": 4,
+  "output_tokens": 428,
+  "cache_read_input_tokens": 2996,
+  "cache_creation_input_tokens": 521
  },
  "model_usage": {
   "claude-haiku-5-5": {
-   "inputTokens": 6,
-   "outputTokens": 599
+   "inputTokens": 4,
+   "outputTokens": 428
   }
  },
- "cost_usd": 0.000715,
+ "cost_usd": 0.000349,
  "agent": "assembler",
  "key": "ac1e6640d497223a3cb8e339",
  "prompt_version": "2026-10-29.1",
  "model": "claude-haiku-5-5",
  "user_prompt": "{\"product\": \"OMB\", \"country\": \"US\", \"questions\": [{\"text\": \"Is Ombrexa better than tiotropium for my COPD patients?\", \"topic\": \"other\"}]}",
- "recorded_at": "2026-11-02T11:59:50+00:00"
+ "recorded_at": "2026-11-18T11:53:03+00:00"
 }

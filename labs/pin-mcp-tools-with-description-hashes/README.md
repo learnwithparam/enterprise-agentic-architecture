@@ -60,3 +60,10 @@ to `if True:`. Step 3 fails: the changed description would be served. Put it bac
 
 `tests/test_live_i_mcp_pins.py` builds the real server and lists its tools. After a reviewed change, run
 `uv run python -m hcpagents.mcp_server` to pin the new hashes. The pin change shows in the pull request.
+
+## New words
+
+- **MCP**: A standard way for an agent to call tools on another system.
+- **hash**: A short fingerprint of some text.
+- **pin**: A saved hash that a tool must match.
+- **tool description**: The text a model reads to learn what a tool does.

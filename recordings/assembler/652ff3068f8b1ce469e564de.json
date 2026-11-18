@@ -52,21 +52,21 @@
  ],
  "usage": {
   "input_tokens": 4,
-  "output_tokens": 465,
-  "cache_read_input_tokens": 2397,
-  "cache_creation_input_tokens": 1701
+  "output_tokens": 460,
+  "cache_read_input_tokens": 3064,
+  "cache_creation_input_tokens": 1040
  },
  "model_usage": {
   "claude-haiku-5-5": {
    "inputTokens": 4,
-   "outputTokens": 465
+   "outputTokens": 460
   }
  },
- "cost_usd": 0.000597,
+ "cost_usd": 0.000469,
  "agent": "assembler",
  "key": "652ff3068f8b1ce469e564de",
  "prompt_version": "2026-10-29.1",
  "model": "claude-haiku-5-5",
  "user_prompt": "{\"product\": \"OMB\", \"country\": \"US\", \"questions\": [{\"text\": \"How many inhalations of Ombrexa per day?\", \"topic\": \"dosing\"}, {\"text\": \"How should the Ombrexa inhaler be cleaned?\", \"topic\": \"inhaler_care\"}]}",
- "recorded_at": "2026-11-02T11:59:05+00:00"
+ "recorded_at": "2026-11-18T11:52:21+00:00"
 }

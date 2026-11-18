@@ -1,16 +1,16 @@
 # Gate releases with evals
 
-**The job:** an engineer changes the triage prompt to handle Japanese better. Before that change reaches a
-doctor, the team must know it still sends every adverse event to pharmacovigilance, never sends a reply a
-human should have reviewed, and never calls a model outside the allowlist in `evals/gate.toml`: Haiku 5.5
-by default, Sonnet 5.5 where the router allows it.
+**The job:** an engineer changes the triage prompt to handle Japanese better. The team must check three
+things before the change reaches a doctor. Every adverse event must still go to pharmacovigilance. No reply
+may go out that a human should have reviewed. No call may use a model outside the allowlist in
+`evals/gate.toml`: Haiku 5.5 by default, Sonnet 5.5 where the router allows it.
 
 **Before:** someone tries a few questions in a playground and says it looks fine.
 
 **After:** `evals/gate.toml` is the release contract. `make evals` runs all twenty synthetic inquiries
-through the full graph and scores them; `make check` fails on any line that does not hold. Each inquiry
-lists its expected route and the more cautious routes that are also safe, so caution passes and risk does
-not.
+through the full graph and scores them. `make check` fails on any line that does not hold. Each inquiry
+lists its expected route. It also lists the more cautious routes that are safe. So caution passes and risk
+does not.
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ make up && make evals                 # the real gate over every inquiry, in rep
 
 Expect: 5 passed
 
-Then `make evals` scores all twenty inquiries; its last two lines are the totals and the verdict.
+Then `make evals` scores all twenty inquiries. Its last two lines are the totals and the verdict.
 
 Expect: 20 cases, route_acceptable 1.0, ae_recall 1.0, then `gate passed`
 
@@ -65,3 +65,10 @@ would now ship a change that drops safety reports. Put it back to `1.0`.
 The same gate in CI on every pull request that touches a prompt, a model id, content or a policy, with
 `LIVE=1` against Bedrock on a schedule so drift in the model shows up even when the code has not changed.
 Per-call traces go to Langfuse for review.
+
+## New words
+
+- **eval**: A test that scores how the system handles sample inquiries.
+- **gate**: A check that blocks a release when a score is too low.
+- **recall**: The share of real cases that the system caught.
+- **allowlist**: The short list of models the system may call.

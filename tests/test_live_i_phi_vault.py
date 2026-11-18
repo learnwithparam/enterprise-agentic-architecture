@@ -44,3 +44,15 @@ def test_the_vault_is_sealed_per_case_and_closed_to_other_tenants(fresh):
     assert phi_vault.restore(safe, "inq-102") == safe
     with world.as_tenant("marlowe"):
         assert phi_vault.restore(safe, "inq-101") == safe
+
+
+def test_the_model_reads_tokens_for_a_doctor_and_the_case_keeps_the_real_name():
+    from hcpagents import cases, world
+
+    inquiry = world.inquiries()[0] | {"text": "Dr. Kaya asks about the dose. Call +49 170 1234567."}
+    case = cases.begin(inquiry)
+    seen = case.thread_text()
+    assert "Kaya" not in seen and "1234567" not in seen
+    assert len(phi_vault.TOKEN.findall(seen)) == 2
+    assert "Kaya" in phi_vault.restore(seen, case.doc["id"])
+    assert "Kaya" in case.full_text()

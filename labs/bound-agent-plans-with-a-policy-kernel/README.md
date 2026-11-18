@@ -56,3 +56,10 @@ out-of-order test fails: a plan could now run retrieval before the safety screen
 
 LangGraph runs each agent's reasoning graph inside one kernel step, and a test walks every transition
 of the graph through the kernel (`tests/test_kernel.py`).
+
+## New words
+
+- **policy kernel**: The fixed code that decides which steps may run and in what order.
+- **fail closed**: When a check fails, stop and hand the case to a person.
+- **route**: The place a case is sent next, such as send or reviewer.
+- **fact**: A value a step sets, such as whether a message holds an adverse event.

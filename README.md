@@ -11,13 +11,9 @@ and a test that proves the property.
 | 4. Prove Every Release with an Eval Gate | Twenty eval cases, a gate that fails on one missed adverse event, and mutants | [Gate releases](labs/gate-releases-with-evals/) |
 | Beyond the sessions | A router, bounded plans, arbitration, durable cases, tenant isolation, a facet gate, a guardian and a sentinel | [Pick the model](labs/pick-the-model-with-a-router/), [Bound plans](labs/bound-agent-plans-with-a-policy-kernel/), [Arbitrate](labs/arbitrate-agents-with-a-supervisor/), [Keep a case alive](labs/keep-a-case-alive-with-temporal/), [Isolate tenants](labs/isolate-tenants-with-row-level-security/), [Retrieve behind a gate](labs/retrieve-behind-a-facet-gate/), [Let the guardian only tighten](labs/let-the-guardian-only-tighten/), [Watch with the sentinel](labs/watch-with-the-sentinel-and-steward/), [Delegate with a narrow brief](labs/delegate-with-a-narrow-brief/), [Fit the thread](labs/fit-the-thread-to-a-token-budget/), [Cap calls](labs/cap-model-calls-per-case-and-day/), [Redraft once](labs/redraft-a-failed-check-once/), [Tokenise PHI](labs/tokenise-phi-with-a-vault/), [Pin MCP tools](labs/pin-mcp-tools-with-description-hashes/) |
 
-**The job:** answer doctors' product questions for a pharmaceutical company in minutes instead of days,
-without ever sending a sentence that Compliance cannot trace to current, approved content, and without
-ever missing an adverse event.
+**The job:** answer doctors' product questions for a pharmaceutical company in minutes instead of days. Never send a sentence that Compliance cannot trace to current, approved content. Never miss an adverse event.
 
-Quillon Biopharma is synthetic, and so is every doctor, product and content block. The architecture is
-the real one: agents on the Claude Agent SDK, on `claude-haiku-5-5` or `claude-sonnet-5-5`, and AWS services running locally
-on [Floci](https://floci.io/). The same boto3 code runs against AWS.
+Quillon Biopharma is synthetic. So is every doctor, product and content block. The architecture is the real one. The agents run on the Claude Agent SDK, on `claude-haiku-5-5` or `claude-sonnet-5-5`. The AWS services run locally on [Floci](https://floci.io/). The same boto3 code runs against AWS.
 
 | Before | After, in this repository |
 |---|---|
@@ -41,30 +37,20 @@ make serve    # the console on http://localhost:8765
 make check    # the gate: tests, labs, evals, mutants, prose, web build, diagrams
 ```
 
-Replay needs no key: model calls replay from `recordings/` by default, so all of the above is free.
-`make record` and `make serve LIVE=1` need `ANTHROPIC_API_KEY`. For live calls copy `.env.example` to a file named `.env` (git ignores it) and set `ANTHROPIC_API_KEY`,
-then run `make serve LIVE=1`. The repo reads that file into its own process only; nothing sources it.
-`make record` calls Haiku 5.5 for every inquiry, about two cents in total, under the spend cap in
-`policies/autonomy.toml`.
+Replay needs no key. Model calls replay from `recordings/` by default, so all of the above is free. `make record` and `make serve LIVE=1` need `ANTHROPIC_API_KEY`. For live calls, copy `.env.example` to a file named `.env` (git ignores it) and set `ANTHROPIC_API_KEY`. Then run `make serve LIVE=1`. The repo reads that file into its own process only. Nothing sources it. `make record` calls Haiku 5.5 for every inquiry. That costs about two cents in total, under the spend cap in `policies/autonomy.toml`.
 
 ## Read it
 
-The four sessions teach the build. These pages are the reading around it, and a PM starts with the
-case study and the delivery plan.
+The four sessions teach the build. These pages are the reading around it. A PM starts with the case study and the delivery plan.
 
-- [Case study](docs/case-study.md): the platform, agentic AI in a regulated setting, the delivery plan, and
-  why this slice.
-- [Architecture walkthrough](docs/architecture-walkthrough.md): each part, and the three flows Compliance
-  cares about, traced through the code.
-- [Product walkthrough](docs/product-walkthrough.md): the console screen by screen, with the moments it
-  refuses to answer or act.
-- [Coverage](docs/coverage.md): every ask in the case study, every role requirement and every agentic concept,
-  with the doc, screen, lab and test for each, checked by `tests/test_coverage.py`.
+- [Case study](docs/case-study.md): the platform, agentic AI in a regulated setting, the delivery plan, and why this slice.
+- [Architecture walkthrough](docs/architecture-walkthrough.md): each part, and the three flows Compliance cares about, traced through the code.
+- [Product walkthrough](docs/product-walkthrough.md): the console screen by screen, with the moments it refuses to answer or act.
+- [Coverage](docs/coverage.md): every ask in the case study, every role requirement and every agentic concept, with the doc, screen, lab and test for each, checked by `tests/test_coverage.py`.
 - [Validation pack](docs/validation-pack.md): a GAMP 5 style map from each requirement to its test and mutant.
 - [EU AI Act classification](docs/eu-ai-act.md): where each agent falls and which control meets each duty.
 - [Delivery plan](docs/delivery-plan.md): from first conversations to a first release in Germany.
-- [Architecture decisions](docs/adr/README.md): each one names the failure it prevents and the test that
-  enforces it.
+- [Architecture decisions](docs/adr/README.md): each one names the failure it prevents and the test that enforces it.
 - [Labs](labs/README.md): one property per lab, a test that proves it, and a change that breaks it.
 
 ## Layout

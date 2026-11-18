@@ -51,3 +51,10 @@ fails: the guardian now loosens the country it was meant to tighten. Put it back
 ## What production adds
 
 A guardian per tenant and a window that starts at the last human change, so old rejections stop counting.
+
+## New words
+
+- **guardian**: A watcher that may only make the rules stricter.
+- **improver**: A helper that may only write proposals.
+- **override rate**: The share of drafts that reviewers reject.
+- **patrol**: One check of the recent reviewer decisions.

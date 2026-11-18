@@ -33,8 +33,8 @@ flowchart TD
 ## Steps
 
 1. Check the first reply.
-2. If it fails, redraft once, told what failed.
-3. Check the redraft. Its verdict stands.
+2. Redraft once, told what failed.
+3. Check the redraft. Its verdict stands, grounded or not.
 
 These are the `# Step` comments in `verify_with_one_redraft`.
 
@@ -67,3 +67,10 @@ no usable block fails: an empty redraft would be checked as a reply with no answ
 
 `tests/test_live_g_redraft.py` runs a real case through the assembler agent. It checks that the redraft is
 written to the ledger with its problems and that a failed redraft routes to a reviewer.
+
+## New words
+
+- **redraft**: Try the pick again once, told what failed.
+- **grounded**: Backed by approved text.
+- **usable id**: A block id that a search returned for this product and country.
+- **reviewer**: The person who checks a draft before it goes out.

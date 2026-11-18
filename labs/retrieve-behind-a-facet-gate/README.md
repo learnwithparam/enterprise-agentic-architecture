@@ -52,3 +52,10 @@ test fails: the withdrawn storage block is back in the results. Put it back.
 ## What production adds
 
 A re-index on every content change, and a cache that forgets a block the moment it is withdrawn.
+
+## New words
+
+- **facet**: A field you filter on, such as product or country.
+- **facet gate**: A hard filter that runs before any ranking.
+- **hybrid retrieval**: Search that mixes full text with vectors.
+- **embedding**: A list of numbers that stands for the meaning of a text.

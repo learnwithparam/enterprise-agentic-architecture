@@ -5,9 +5,7 @@ description: A GAMP 5 style validation pack that maps each requirement to the te
 
 # Validation pack
 
-A computerised system that supports a regulated process is validated before use and kept validated after
-each change. This pack follows the shape of GAMP 5 (category 5, custom software): what the system must do,
-how each requirement is proven, and what keeps it proven.
+A computer system that supports a regulated process must be checked before use. It must stay checked after each change. This pack follows the shape of GAMP 5 (category 5, custom software). It shows what the system must do. It shows how each requirement is proven. It shows what keeps it proven.
 
 | GAMP 5 artefact | Here |
 |---|---|
@@ -23,8 +21,7 @@ how each requirement is proven, and what keeps it proven.
 
 ## Requirements and the evidence for each
 
-A mutant is an edit that breaks the property. The gate fails if no test notices it, which is what makes the
-test evidence and not decoration. `tests/test_coverage.py` fails when a test or mutant named here does not exist.
+A mutant is an edit that breaks the property. The gate fails if no test notices it. That is what makes the test evidence and not decoration. `tests/test_coverage.py` fails when a test or mutant named here does not exist.
 
 | Requirement | Test | Mutant |
 |---|---|---|
@@ -47,6 +44,4 @@ test evidence and not decoration. `tests/test_coverage.py` fails when a test or 
 
 ## What this pack does not cover
 
-It validates the platform, not a client's content. The client validates its approved blocks in its MLR
-system, and signs off the cleared topics per country. Running against real data needs an installation
-qualification in the client's account, which this repository synthesizes but does not deploy.
+It validates the platform, not a client's content. The client checks its approved blocks in its MLR system. The client also signs off the cleared topics per country. Running on real data needs an installation qualification. That happens in the client's account. This repository builds the stack as code but does not deploy it.

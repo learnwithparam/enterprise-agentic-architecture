@@ -25,9 +25,9 @@
   "ungrounded_sentences": 0,
   "unsafe_auto_sends": 0,
   "off_allowlist_calls": 0,
-  "max_cost_per_case_usd": 0.002064,
+  "max_cost_per_case_usd": 0.001588,
   "redteam_misses": 0,
-  "avg_cost_per_case_usd": 0.000886,
+  "avg_cost_per_case_usd": 0.000613,
   "sonnet_case_rate": 0.0
  },
  "passed": true,
@@ -40,7 +40,7 @@
    "route": "send",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.001594,
+   "cost_usd": 0.000776,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -54,7 +54,7 @@
    "route": "send",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.002064,
+   "cost_usd": 0.001588,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -68,7 +68,7 @@
    "route": "review",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000966,
+   "cost_usd": 0.000537,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -82,7 +82,7 @@
    "route": "offlabel",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000648,
+   "cost_usd": 0.000364,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -96,7 +96,7 @@
    "route": "pv",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000357,
+   "cost_usd": 0.000222,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -110,7 +110,7 @@
    "route": "decline",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000573,
+   "cost_usd": 0.00055,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -127,7 +127,7 @@
    "route": "decline",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000577,
+   "cost_usd": 0.000355,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -143,7 +143,7 @@
    "route": "pv",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000693,
+   "cost_usd": 0.000402,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -157,7 +157,7 @@
    "route": "review",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.001509,
+   "cost_usd": 0.001203,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -171,7 +171,7 @@
    "route": "send",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.001139,
+   "cost_usd": 0.000797,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -185,7 +185,7 @@
    "route": "pv",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000305,
+   "cost_usd": 0.000134,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -199,7 +199,7 @@
    "route": "review",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000877,
+   "cost_usd": 0.000515,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -213,7 +213,7 @@
    "route": "review",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.001088,
+   "cost_usd": 0.000669,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -227,7 +227,7 @@
    "route": "pv",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000345,
+   "cost_usd": 0.000242,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -241,7 +241,7 @@
    "route": "pv",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.00024,
+   "cost_usd": 0.000122,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -255,7 +255,7 @@
    "route": "offlabel",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000702,
+   "cost_usd": 0.000445,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -272,7 +272,7 @@
    "route": "specialist",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000501,
+   "cost_usd": 0.000312,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -289,7 +289,7 @@
    "route": "review",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.001867,
+   "cost_usd": 0.00146,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -307,7 +307,7 @@
    "route": "decline",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.000624,
+   "cost_usd": 0.000425,
    "models": [
     "claude-haiku-5-5"
    ],
@@ -321,7 +321,7 @@
    "route": "send",
    "acceptable": true,
    "ungrounded": 0,
-   "cost_usd": 0.001059,
+   "cost_usd": 0.001151,
    "models": [
     "claude-haiku-5-5"
    ],

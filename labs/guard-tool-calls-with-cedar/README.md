@@ -1,16 +1,16 @@
 # Guard tool calls with Cedar
 
 **The job:** the assembler agent searches approved content for a German Veltrona case. It must never read
-US or Japanese content for that case, never call a tool that is not on its list, and every call it makes,
-allowed or refused, must be on the audit trail with the reason.
+US or Japanese content for that case. It must never call a tool that is not on its list. Every call it
+makes must be on the audit trail with the reason, whether the call was allowed or refused.
 
 **Before:** the agent has a search tool and a prompt that says "only use German content". A prompt is a
 request, not a control.
 
 **After:** an Agent SDK `PreToolUse` hook runs `guards.pre_tool` before every call. The guard checks the
-allowlist and the case's country and product in code, then asks Amazon Verified Permissions, where
-`policies/cedar/agents.cedar` says the same thing in a language Compliance can read. Either check alone is
-enough to refuse.
+allowlist and the case's country and product in code. Then it asks Amazon Verified Permissions. There,
+`policies/cedar/agents.cedar` says the same thing in a language Compliance can read. Either check alone can
+refuse.
 
 ## Prerequisites
 
@@ -60,5 +60,12 @@ force, and the "another country" test fails. Put the block back.
 
 ## What production adds
 
-The same policy store and the same `is_authorized` call, with the entities built from the identity
+The same policy store and the same `is_authorized` call are used. The entities come from the identity
 provider's claims. Each decision lands on the ledger with the policy file that made it.
+
+## New words
+
+- **Cedar**: A readable language for writing permission rules.
+- **PreToolUse hook**: Code that runs before an agent calls a tool and may refuse the call.
+- **allowlist**: The short list of tools an agent may use.
+- **Verified Permissions**: The AWS service that checks Cedar rules.

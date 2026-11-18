@@ -1,6 +1,6 @@
 # Architecture decisions
 
-Each decision names the failure it prevents and the test that enforces it.
+Each decision names the failure it stops. It also names the test that enforces it.
 
 - [ADR 0001: A fixed graph routes every inquiry, not the model](./0001-fixed-graph-over-model-routing.md)
 - [ADR 0002: The model selects approved block ids and never writes text](./0002-model-selects-ids-never-writes.md)

@@ -4,17 +4,17 @@ Status: accepted, 15 October 2026
 
 ## Context
 
-The brief asks for zero hallucination and proof that outbound content is current and approved. A
-generated sentence, however good, has no approval reference. Retrieval-augmented generation reduces errors
-but still produces sentences nobody approved.
+The brief asks for zero hallucination. It also asks for proof that outgoing content is current and
+approved. A model-written sentence, however good, has no approval ID. Retrieval-augmented generation
+cuts errors. But it still makes sentences that nobody approved.
 
 ## Decision
 
-The assembler agent returns block ids per question. Code places those blocks verbatim between the
-opening template, the safety information, the country's AI disclosure and the closing template
-(`grounding.compose`). `grounding.verify` then checks every sentence against the content store as it is now:
-each must match a sentence of a current block for this product and country, and the required blocks must be
-present.
+The assembler agent returns block ids for each question. Code places those blocks word for word. They go between
+the opening template, the safety information, the AI note for the country and the closing template
+(`grounding.compose`). Then `grounding.verify` checks every sentence against the content store as it is
+now. Each sentence must match a sentence in a current block. That block must be for this product and country.
+The required blocks must be there too.
 
 ## Options considered
 
@@ -24,11 +24,10 @@ present.
 
 ## Consequences
 
-Replies read like standard response letters, not conversation. A question no block covers goes to a
-human with no draft. Every sentence sent carries its block, version and MLR reference.
+Replies read like standard response letters, not like a chat. If no block covers a question, it goes to a human with no draft. Every sentence sent carries its block, version and MLR reference.
 
 ## Enforced by
 
-`tests/test_grounding.py`: one changed word fails, an invented sentence fails, another country's or
-product's block is not evidence, an expired block is not evidence, the safety information cannot be left
-out, and a block withdrawn after drafting fails at send time.
+`tests/test_grounding.py` checks these. One changed word fails. An invented sentence fails. A block from
+another country or product is not evidence. An expired block is not evidence. The safety information cannot
+be left out. A block withdrawn after drafting fails at send time.

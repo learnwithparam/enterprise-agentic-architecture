@@ -5,17 +5,11 @@ description: Where each agent falls under the EU AI Act, what duties follow, and
 
 # EU AI Act classification
 
-This is the engineering view for the design review, not legal advice. Legal confirms the classification
-before a go-live in the EU.
+This is the engineering view for the design review. It is not legal advice. Legal confirms the classification before a go-live in the EU.
 
 ## Where the platform sits
 
-The platform is a system that answers doctors about approved product information, screens messages for
-adverse events, plans outreach and summarises what doctors raise. It makes no decision about a patient's
-care, a person's employment, credit, education or access to a public service, which are the Annex III
-areas. A medical information assistant for healthcare professionals is therefore **not high-risk by
-default**. Two features come close enough that the design keeps the high-risk evidence anyway, so a
-reclassification costs paperwork and not a rebuild.
+The platform answers doctors about approved product facts. It screens messages for adverse events. It plans outreach. It sums up what doctors raise. It makes no decision about a patient's care. It makes no decision about a person's job, credit, schooling or access to a public service. Those are the Annex III areas. So an information assistant for health workers is **not high-risk by default**. Two features come close. So the design keeps the high-risk evidence anyway. Then a change in class costs paperwork and not a rebuild.
 
 | Feature | Closest high-risk reading | Why it is limited-risk here | Evidence kept regardless |
 |---|---|---|---|
@@ -38,10 +32,7 @@ reclassification costs paperwork and not a rebuild.
 
 ## What changes if a feature becomes high-risk
 
-- The sentinel starts deciding whether a report is serious. That moves it into a medical-device-adjacent
-  reading. Keep it escalate-only.
-- The outreach coordinator starts to withhold information a doctor needs for patient care. Keep it a hold on
-  promotion only.
+- The sentinel starts deciding whether a report is serious. That moves it into a medical-device-adjacent reading. Keep it escalate-only.
+- The outreach coordinator starts to withhold information a doctor needs for patient care. Keep it a hold on promotion only.
 
-Each of these is a roster row in `world/agents.toml` ("never" column) and a Cedar policy, so a change to
-either is a reviewed diff and an ADR.
+Each of these is a roster row in `world/agents.toml` ("never" column) and a Cedar policy. So a change to either is a reviewed diff and an ADR.

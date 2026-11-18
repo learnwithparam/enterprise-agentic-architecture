@@ -54,3 +54,13 @@ def test_the_whole_codebase_reads_plainly():
         for path in sorted((ROOT / folder).rglob("*.py")):
             found.extend(f"{path.name}:{line}: {message}" for line, message in gate.problems_in(path))
     assert found == []
+
+
+def test_a_doc_may_not_read_harder_than_its_baseline_and_a_new_doc_must_meet_the_goal():
+    spec = importlib.util.spec_from_file_location("check_docs_plain", ROOT / "scripts" / "check_docs_plain.py")
+    docs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(docs)
+    assert docs.problems({"a.md": 7.1}, {"a.md": 7.1}) == []
+    assert docs.problems({"a.md": 7.2}, {"a.md": 7.1}) != []
+    assert docs.problems({"new.md": 6.6}, {}) != []
+    assert docs.problems(docs.grades(), docs.json.loads(docs.BASELINE.read_text())) == []

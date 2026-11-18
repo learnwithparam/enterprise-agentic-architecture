@@ -1,17 +1,18 @@
 # Pin the model with Agent SDK options
 
-**The job:** the eval gate passed on Claude Haiku 5.5. Production must run that exact model, with that
-exact prompt, and nothing from the machine it runs on (a developer's `~/.claude` settings, plugins, MCP
-servers or slash commands) may change what the agent can do or which model a background call uses.
+**The job:** the eval gate passed on Claude Haiku 5.5. Production must run that exact model with that
+exact prompt. Nothing from the machine it runs on may change what the agent can do. That means a
+developer's `~/.claude` settings, plugins, MCP servers or slash commands. Nothing may change which model a
+background call uses either.
 
 **Before:** the Agent SDK starts the Claude Code runtime with whatever settings it finds. A plugin adds a
-tool, a settings file switches the small model, and the run that passed the gate is not the run in
+tool. A settings file switches the small model. So the run that passed the gate is not the run in
 production.
 
 **After:** `agents._options` builds every agent's `ClaudeAgentOptions` the same way: `model` pinned,
 `setting_sources=[]`, `strict_mcp_config=True`, no plugins, slash commands disabled, built-in tools off,
 and the background model environment variables pinned to the same id. Every result is checked for the
-models it used, and cost is computed from tokens at Haiku 5.5 prices.
+models it used. The cost comes from the tokens, at Haiku 5.5 prices.
 
 ## Prerequisites
 
@@ -56,6 +57,13 @@ lab. The isolation test fails: the agent would now load your own Claude settings
 
 ## What production adds
 
-The same options with `CLAUDE_CODE_USE_BEDROCK=1` and a Bedrock inference profile for Haiku 5.5 in the
-client's region. The spend cap per case and per session stays in code, because the runtime's own budget is
-a backstop, not the control.
+The same options are used with `CLAUDE_CODE_USE_BEDROCK=1` and a Bedrock inference profile for Haiku 5.5 in
+the client's region. The spend cap per case and per session stays in code. The runtime's own budget is a
+backstop, not the control.
+
+## New words
+
+- **Agent SDK**: The kit that runs the Claude Code engine from your code.
+- **pinned**: Fixed to one value so it cannot change.
+- **setting sources**: The places where the engine looks for settings.
+- **recording key**: The fingerprint that matches a saved run to its prompt.

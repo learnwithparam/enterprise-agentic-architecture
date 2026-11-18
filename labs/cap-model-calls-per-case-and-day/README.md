@@ -28,8 +28,8 @@ flowchart TD
 
 ## Steps
 
-1. Check the hops and the model calls of this one case.
-2. Check the tenant's calls today, read from the store.
+1. The hops and the calls of this one case.
+2. The tenant's calls today, read from the store so a restart cannot hide them.
 
 These are the `# Step` comments in `check`.
 
@@ -61,3 +61,10 @@ fails: a tenant could spend with no daily limit. Put it back.
 
 `tests/test_live_g_caps.py` runs a real case. It shows the model is never called after a refusal and that the
 kernel turns the refusal into a review with the rule `cap_exceeded`.
+
+## New words
+
+- **cap**: A hard limit on how many times something may happen.
+- **hop**: One agent run inside a case.
+- **ledger**: The saved record of what the system did.
+- **tenant**: One client company whose data is kept apart from the others.

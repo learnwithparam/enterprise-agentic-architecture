@@ -48,21 +48,21 @@
  ],
  "usage": {
   "input_tokens": 4,
-  "output_tokens": 537,
-  "cache_read_input_tokens": 2390,
-  "cache_creation_input_tokens": 1744
+  "output_tokens": 477,
+  "cache_read_input_tokens": 3050,
+  "cache_creation_input_tokens": 1086
  },
  "model_usage": {
   "claude-haiku-5-5": {
    "inputTokens": 4,
-   "outputTokens": 537
+   "outputTokens": 477
   }
  },
- "cost_usd": 0.000642,
+ "cost_usd": 0.000487,
  "agent": "assembler",
  "key": "3c766a55492219673ecb81c3",
  "prompt_version": "2026-10-29.1",
  "model": "claude-haiku-5-5",
  "user_prompt": "{\"product\": \"VEL\", \"country\": \"US\", \"questions\": [{\"text\": \"How should Veltrona be stored?\", \"topic\": \"storage\"}, {\"text\": \"What should patients do if they miss a dose of Veltrona?\", \"topic\": \"missed_dose\"}]}",
- "recorded_at": "2026-11-02T11:58:01+00:00"
+ "recorded_at": "2026-11-18T11:51:20+00:00"
 }

@@ -58,3 +58,10 @@ The first test fails: no `review_overdue` ever reaches the ledger, so nobody lea
 ## What production adds
 
 A worker per tenant queue, and a deadline in days, not seconds. Temporal keeps the wait across deploys.
+
+## New words
+
+- **Temporal**: A tool that keeps a long task alive across crashes and deploys.
+- **workflow**: A task that Temporal runs and remembers.
+- **escalate**: Tell someone that a task is overdue.
+- **signal**: A message sent to a running workflow.

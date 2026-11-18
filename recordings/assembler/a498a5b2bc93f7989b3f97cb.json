@@ -54,35 +54,35 @@
    "input": {
     "product": "VEL",
     "country": "US",
-    "query": "keep tablets away from heat, light, moisture, room temperature, child-safe container, disposal"
+    "query": "what temperature should the tablets be kept at, conditions for keeping the medicine at home"
    },
    "allowed": true,
    "reason": "Verified Permissions: ALLOW (agents.cedar)",
    "returned": [
     "VEL-US-ADMIN",
+    "VEL-US-MISS",
     "VEL-US-STOR",
-    "VEL-US-INTER",
-    "VEL-US-PED"
+    "VEL-US-DOSE"
    ]
   }
  ],
  "usage": {
   "input_tokens": 6,
-  "output_tokens": 636,
-  "cache_read_input_tokens": 5085,
-  "cache_creation_input_tokens": 2438
+  "output_tokens": 631,
+  "cache_read_input_tokens": 5790,
+  "cache_creation_input_tokens": 1719
  },
  "model_usage": {
   "claude-haiku-5-5": {
    "inputTokens": 6,
-   "outputTokens": 636
+   "outputTokens": 631
   }
  },
- "cost_usd": 0.000857,
+ "cost_usd": 0.000718,
  "agent": "assembler",
  "key": "a498a5b2bc93f7989b3f97cb",
  "prompt_version": "2026-10-29.1",
  "model": "claude-haiku-5-5",
  "user_prompt": "{\"product\": \"VEL\", \"country\": \"US\", \"questions\": [{\"text\": \"How should Veltrona be stored?\", \"topic\": \"storage\"}, {\"text\": \"What should patients do if they miss a dose of Veltrona?\", \"topic\": \"missed_dose\"}], \"retry\": {\"not_covered\": [\"How should Veltrona be stored?\"], \"note\": \"Search again for these using different words from the question.\"}}",
- "recorded_at": "2026-11-02T11:58:07+00:00"
+ "recorded_at": "2026-11-18T11:51:26+00:00"
 }

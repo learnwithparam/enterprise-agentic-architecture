@@ -5,13 +5,9 @@ description: How the agentic system is built, one doctor at a time, with the lay
 
 # Architecture walkthrough
 
-This is a system of agents, not one agent and not a workflow with agents as steps. Eight goal-driven
-agents live for a long time, perceive events from every channel, coordinate through shared state, act
-alone only where that lowers risk, and improve from what reviewers correct. A control plane that
-Compliance can read bounds all of them.
+This is a system of agents. It is not one agent. It is not a workflow with agents as steps. Eight agents, each with its own goal, live for a long time. They watch events from every channel. They share state to work together. They act alone only where that lowers risk. They improve from what reviewers correct. A control plane that Compliance can read limits all of them.
 
-The walkthrough follows one doctor through the platform in four acts. A layer appears at the moment the
-step before it breaks without it. Each step names the problem, the choice, the code and the test.
+The walkthrough follows one doctor through the platform in four acts. A layer appears at the moment the step before it breaks without it. Each step names the problem, the choice, the code and the test.
 
 ## The system at a glance
 
@@ -31,8 +27,7 @@ flowchart LR
   clients <--> sys
 ```
 
-The platform serves more than one client. Quillon Biopharma is the first tenant and Marlowe Therapeutics
-the second; no row, key or queue is shared between them.
+The platform serves more than one client. Quillon Biopharma is the first tenant. Marlowe Therapeutics is the second. They share no row, key or queue.
 
 ## The four planes
 
@@ -107,18 +102,13 @@ flowchart LR
   sentinel -- "opens a PV case, freezes contact" --> supervisor
 ```
 
-`world/agents.toml` holds one row per agent: its goal, what it perceives, what it does alone, what it only
-proposes, what it never does and which model class it uses. `GET /api/agents` joins each row with its
-calls and cost, and the Agents page shows it (ADR 0030). The rule underneath: **an agent acts alone only in
-the direction that lowers risk.** Sending, contacting and promoting are proposals. Overriding the kernel,
-assessing causality and raising anyone's autonomy are never available.
+`world/agents.toml` holds one row per agent. The row lists its goal, what it sees, what it does alone, what it only proposes, what it never does and which model class it uses. `GET /api/agents` joins each row with its calls and cost. The Agents page shows it (ADR 0030). The rule underneath: **an agent acts alone only in the direction that lowers risk.** Sending, contacting and promoting are proposals. Overriding the kernel, judging cause and raising anyone's autonomy are never available.
 
 ## Act 1: one question, answered safely
 
 ### 1. Who is asking, and for which client?
 
-A question arrives, and the first thing the platform needs is an identity and a tenant, both from a signed
-token and never from a header the caller controls.
+A question arrives. The platform first needs an identity and a tenant. Both come from a signed token. They never come from a header the caller controls.
 
 - `auth.py` verifies the token against the identity provider's keys and takes the tenant from it (ADR 0010).
 - `db.py` sets `app.tenant_id` on every connection and Postgres row-level security does the rest (ADR 0009).
@@ -135,16 +125,11 @@ flowchart LR
   az -- "DENY" --> r403["403, and the refusal is on the ledger"]
 ```
 
-Tests: every route needs a token, every table has row-level security, and a tenant B user gets nothing of
-tenant A's through the API, MCP or the CLI.
+Tests: every route needs a token. Every table has row-level security. A tenant B user gets nothing of tenant A's through the API, MCP or the CLI.
 
 ### 2. It may hide an adverse event or an injection
 
-`rules.py` screens every message with keywords that never depend on a model, and the safety agent quotes
-the passage. A possible adverse event goes to pharmacovigilance whatever else the message asks, and the
-model never sees it again. The **policy kernel** (`kernel.py`, from the routing table in `graph.py`) is
-what makes this hold: it checks every step an agent plans against the table, and any plan that would skip
-a safety step is refused (ADR 0013).
+`rules.py` screens every message with keywords. They never depend on a model. The safety agent quotes the passage. A possible adverse event goes to pharmacovigilance whatever else the message asks. The model never sees it again. The **policy kernel** makes this hold (`kernel.py`, from the routing table in `graph.py`). It checks every step an agent plans against the table. It refuses any plan that would skip a safety step (ADR 0013).
 
 ```mermaid
 flowchart TD
@@ -162,15 +147,11 @@ flowchart TD
   r5 -- yes --> send["route: sent automatically"]
 ```
 
-The diagram is a picture of `graph.ROUTING`, and `graph.asl()` emits the same table as a Step Functions
-definition. A new rule is one row in that table, never an edge somewhere else.
+The diagram is a picture of `graph.ROUTING`. `graph.asl()` emits the same table as a Step Functions definition. A new rule is one row in that table. It is never an edge somewhere else.
 
 ### 3. The inquiry agent plans
 
-The inquiry agent splits the message into questions, retrieves, selects blocks, checks that every
-question is covered and tries once more if not (`plan.py`, a LangGraph graph; ADR 0014). It is a bounded
-loop: it cannot run more than a fixed number of cycles, and the kernel checks every transition. The model
-chooses block ids. It never writes a sentence a doctor reads (ADR 0002).
+The inquiry agent splits the message into questions. It retrieves, selects blocks and checks that every question is covered. If not, it tries once more (`plan.py`, a LangGraph graph; ADR 0014). It is a bounded loop. It cannot run more than a fixed number of cycles. The kernel checks every transition. The model chooses block ids. It never writes a sentence a doctor reads (ADR 0002).
 
 ```mermaid
 sequenceDiagram
@@ -195,17 +176,11 @@ sequenceDiagram
   C->>C: keep only ids a permitted call returned
 ```
 
-Model routing (`router.py`, ADR 0008): Haiku 5.5 is the default for high-volume work and Sonnet 5.5 takes
-planning, arbitration and synthesis. A schema failure escalates once to Sonnet, then goes to a person.
-`.claude/hooks/model_allowlist.py` and `tests/test_claude_config.py` refuse any other model id (ADR 0007).
+Model routing (`router.py`, ADR 0008): Haiku 5.5 is the default for high-volume work. Sonnet 5.5 takes planning, arbitration and synthesis. A schema failure goes up once to Sonnet. Then it goes to a person. `.claude/hooks/model_allowlist.py` and `tests/test_claude_config.py` refuse any other model id (ADR 0007).
 
 ### 4. What may we say?
 
-`retrieval.py` searches approved content in two stages (ADR 0012). The **facet filter** (tenant, product,
-country, population, topic, language, approval state) is a hard gate: nothing outside it is ever a
-candidate. Inside it, Postgres full-text and pgvector ranks are fused by reciprocal rank fusion. Embeddings
-come from `embeddings.py`, a port with a local multilingual model by default, so no key is needed and the
-provider is a config choice. Vectors store the model id and dimension, so two models never mix.
+`retrieval.py` searches approved content in two stages (ADR 0012). The **facet filter** is a hard gate. It covers tenant, product, country, population, topic, language and approval state. Nothing outside it is ever a candidate. Inside it, Postgres full-text and pgvector ranks are fused by reciprocal rank fusion. Embeddings come from `embeddings.py`. It is a port with a local multilingual model by default, so no key is needed. The provider is a config choice. Vectors store the model id and dimension, so two models never mix.
 
 ```mermaid
 flowchart LR
@@ -218,19 +193,15 @@ flowchart LR
   cache[("Valkey cache")] -. "only forgets" .-> top
 ```
 
-`retrieval_eval.py` scores recall at k on `world/retrieval.toml`, including other-language questions, and
-the gate fails if hybrid falls below its thresholds. A mutant that drops the facet gate is killed.
+`retrieval_eval.py` scores recall at k on `world/retrieval.toml`. That includes other-language questions. The gate fails if hybrid falls below its thresholds. A mutant that drops the facet gate is killed.
 
 ### 5. Prove every sentence
 
-`grounding.compose` places the selected blocks verbatim between fixed templates. `grounding.verify` checks
-each sentence against the content store as it is now, for that product and country. It runs again at the
-instant of sending, so a block withdrawn while a draft waited can never go out.
+`grounding.compose` places the selected blocks word for word between fixed templates. `grounding.verify` checks each sentence against the content store as it is now, for that product and country. It runs again at the moment of sending. So a block withdrawn while a draft waited can never go out.
 
 ### 6. May it go alone?
 
-The autonomy ladder decides. Only an on-label question, fully covered by current content, on a topic
-Compliance has cleared for that country, is sent without a person. Cedar decides every action that follows.
+The autonomy ladder decides. A reply is sent without a person only in one case. The question is on-label. Current content fully covers it. Compliance has cleared the topic for that country. Cedar decides every action that follows.
 
 | Agent | Acts alone | Proposes | Never |
 |---|---|---|---|
@@ -245,10 +216,7 @@ Compliance has cleared for that country, is sent without a person. Cedar decides
 
 ### 7. Record it so nobody can edit it
 
-`ledger.py` hashes every entry with its predecessor, stores it in Postgres and copies it to an S3 Object
-Lock bucket (compliance mode, ten years), and signs the head with KMS every tenth entry (ADR 0005). Personal
-data in an entry is sealed under a key per person, so erasing a person deletes the key and leaves the chain
-intact (`privacy.py`, ADR 0015).
+`ledger.py` hashes every entry with the one before it. It stores the entry in Postgres. It copies it to an S3 Object Lock bucket (compliance mode, ten years). It signs the head with KMS every tenth entry (ADR 0005). Personal data in an entry is sealed under a key per person. So erasing a person deletes the key and leaves the chain intact (`privacy.py`, ADR 0015).
 
 ```mermaid
 flowchart LR
@@ -262,10 +230,7 @@ flowchart LR
 
 ### 8. A reviewer takes two days
 
-A case that needs a reviewer is a Temporal workflow that waits (`workflows.py`, ADR 0016, 0017). Temporal's
-history is the only durable record of where it is. A worker crash resumes the case where it stopped and
-finishes it once. An SLA timer escalates a case nobody has taken. Approval takes the reviewer's password
-again, which is the electronic signature in the 21 CFR Part 11 sense.
+A case that needs a reviewer is a Temporal workflow that waits (`workflows.py`, ADR 0016, 0017). Temporal's history is the only durable record of where the case is. If a worker crashes, the case resumes where it stopped. It finishes once. An SLA timer escalates a case nobody has taken. Approval takes the reviewer's password again. That is the electronic signature in the 21 CFR Part 11 sense.
 
 ```mermaid
 stateDiagram-v2
@@ -300,9 +265,7 @@ sequenceDiagram
 
 ### 9. A block is withdrawn mid-review
 
-The content steward listens for `ContentWithdrawn`, pulls every impacted draft back to review, re-verifies
-and evicts the cache (ADR 0018). The cache only ever forgets: a stale entry can make a case slower, never
-different.
+The content steward listens for `ContentWithdrawn`. It pulls every impacted draft back to review, checks it again and evicts the cache (ADR 0018). The cache only ever forgets. A stale entry can make a case slower. It can never make it different.
 
 ```mermaid
 sequenceDiagram
@@ -327,12 +290,7 @@ sequenceDiagram
 
 ### 10. The provider fails, and finance asks what each tenant costs
 
-Every model call goes through `gateway.py`, a thin gateway of our own that speaks the Anthropic Messages
-API (ADR 0019). It holds a virtual key per tenant and agent, budgets, failover between providers and a
-spend log row for every call tagged with tenant, agent, release, prompt version and case. The Agent SDK is
-pointed at it with `ANTHROPIC_BASE_URL`, so even tool-using calls are metered. Delivery is at least once, so
-every consumer is idempotent and a message that keeps failing lands in a dead-letter queue with replay
-(ADR 0020).
+Every model call goes through `gateway.py`. It is a thin gateway of our own that speaks the Anthropic Messages API (ADR 0019). It holds a virtual key per tenant and agent, budgets and failover between providers. It writes a spend log row for every call. The row is tagged with tenant, agent, release, prompt version and case. The Agent SDK points at it with `ANTHROPIC_BASE_URL`, so even tool-using calls are metered. Delivery is at least once, so every consumer is idempotent. A message that keeps failing lands in a dead-letter queue with replay (ADR 0020).
 
 ```mermaid
 flowchart LR
@@ -350,10 +308,7 @@ flowchart LR
 
 ### 11. Three teams are about to message the same doctor
 
-`ingest.py` accepts events from the CRM, marketing, the contact centre and the portal, each signed with an
-HMAC and landed once (ADR 0021). `identity.py` resolves a channel's own id to one doctor, and an unknown
-handle stays unlinked rather than guessed (ADR 0022). `hcp360.py` joins the result into one timeline per
-doctor. That record is the agents' shared memory.
+`ingest.py` accepts events from the CRM, marketing, the contact centre and the portal. Each is signed with an HMAC and landed once (ADR 0021). `identity.py` resolves a channel's own id to one doctor. An unknown handle stays unlinked rather than guessed (ADR 0022). `hcp360.py` joins the result into one timeline per doctor. That record is the agents' shared memory.
 
 ```mermaid
 flowchart LR
@@ -368,10 +323,7 @@ flowchart LR
 
 ### 12. Who contacts the doctor next?
 
-The outreach coordinator checks each planned touch against consent, the country's cap, open medical cases
-and whether its content is still current. It holds or proposes, and writes the rule and its reason
-(`outreach.py`). When two agents disagree, the supervisor settles it by policy and never by asking a model
-(`supervisor.py`, ADR 0023). An open medical case blocks promotion.
+The outreach coordinator checks each planned touch against consent, the country's cap, open medical cases and whether its content is still current. It holds or proposes. It writes the rule and its reason (`outreach.py`). When two agents disagree, the supervisor settles it by policy. It never asks a model (`supervisor.py`, ADR 0023). An open medical case blocks promotion.
 
 ```mermaid
 sequenceDiagram
@@ -390,9 +342,7 @@ sequenceDiagram
 
 ### 13. A rep's CRM note mentions a rash
 
-The sentinel reads every interaction on every channel, so nobody has to ask it. It opens a pharmacovigilance
-case and freezes outreach to that doctor and product, which are both risk-reducing actions and so are
-taken alone (`sentinel.py`, ADR 0024).
+The sentinel reads every interaction on every channel, so nobody has to ask it. It opens a pharmacovigilance case. It freezes outreach to that doctor and product. Both actions lower risk, so it takes them alone (`sentinel.py`, ADR 0024).
 
 ```mermaid
 sequenceDiagram
@@ -412,16 +362,13 @@ sequenceDiagram
 
 ### 14. What are doctors raising across channels?
 
-The insight agent clusters what several doctors keep raising. A theme needs at least two doctors and names
-its sources but never quotes them, and it is for internal teams only (`insight.py`).
+The insight agent clusters what several doctors keep raising. A theme needs at least two doctors. It names its sources but never quotes them. It is for internal teams only (`insight.py`).
 
 ## Act 4: it improves, and proves it
 
 ### 15. Self-improvement, proven per release
 
-A **release** pins the prompt versions, the router, the retrieval setup and the policy table, and gets a
-hash for an id (`releases.py`, ADR 0025). Every call, trace and case carries its release id. Corrections
-become proposals through the improver, which promotes nothing (ADR 0026).
+A **release** pins the prompt versions, the router, the retrieval setup and the policy table. It gets a hash for an id (`releases.py`, ADR 0025). Every call, trace and case carries its release id. Corrections become proposals through the improver. The improver promotes nothing (ADR 0026).
 
 ```mermaid
 flowchart LR
@@ -438,18 +385,11 @@ flowchart LR
   live --> corr
 ```
 
-Safety metrics are absolute: adverse-event recall 1.0, zero ungrounded sentences, zero unsafe automatic
-sends, zero calls off the allowlist. Quality and cost are compared with the baseline release. A run that
-failed its gate can never be the baseline. The Releases page shows each metric across releases and how live
-cases behaved under each.
+Safety metrics are absolute: adverse-event recall 1.0, zero ungrounded sentences, zero unsafe automatic sends, zero calls off the allowlist. Quality and cost are compared with the baseline release. A run that failed its gate can never be the baseline. The Releases page shows each metric across releases. It also shows how live cases behaved under each.
 
 ### 16. The guardian and the traces
 
-The guardian watches budgets, drift and the reviewers' override rate. It trips a country's kill switch or
-lowers an agent's autonomy on its own and cannot raise either (`guardian.py`, ADR 0026). `redteam.py`
-holds attacks the rule floor must catch whatever a model says. Every case is one trace in OpenTelemetry's
-GenAI conventions with personal data redacted, exported to Phoenix locally or Langfuse Cloud when its keys
-are set (`tracing.py`, ADR 0027).
+The guardian watches budgets, drift and the reviewers' override rate. It can trip a country's kill switch or lower an agent's autonomy on its own. It cannot raise either (`guardian.py`, ADR 0026). `redteam.py` holds attacks that the rule floor must catch whatever a model says. Every case is one trace in OpenTelemetry's GenAI conventions, with personal data redacted. Traces go to Phoenix locally, or to Langfuse Cloud when its keys are set (`tracing.py`, ADR 0027).
 
 ```mermaid
 sequenceDiagram
@@ -467,8 +407,7 @@ sequenceDiagram
 
 ### 17. Interfaces for staff and their own agents
 
-The console, `/v1`, MCP and the `hcp` CLI share one front door: one middleware, a verified token, the
-tenant from the token and a per-user rate limit (ADR 0028). MCP is a Cedar decision per tool.
+The console, `/v1`, MCP and the `hcp` CLI share one front door. It has one middleware, a verified token, the tenant from the token and a per-user rate limit (ADR 0028). MCP is a Cedar decision per tool.
 
 ```mermaid
 sequenceDiagram
@@ -487,9 +426,7 @@ sequenceDiagram
 
 ### 18. Ship it
 
-`deploy/stack.py` is one CDK stack: Aurora Postgres, ElastiCache, Cognito, Verified Permissions, a locked
-ledger bucket and a KMS key per tenant, and an ECS Fargate service each for the API and the worker. It
-synthesizes with cdk-nag and zero findings, and is never deployed from here (ADR 0029, 0031).
+`deploy/stack.py` is one CDK stack. It holds Aurora Postgres, ElastiCache, Cognito, Verified Permissions, a locked ledger bucket and a KMS key per tenant. It also holds an ECS Fargate service each for the API and the worker. It synthesizes with cdk-nag and zero findings. It is never deployed from here (ADR 0029, 0031).
 
 ```mermaid
 flowchart TB
@@ -507,10 +444,7 @@ flowchart TB
   api --> bedrock["Anthropic API, or Bedrock"]
 ```
 
-GitHub Actions runs the gate, SAST, an SBOM, secret scanning and a dependency audit. The harness the
-team works in is part of the system too: the Agent SDK options in `agents._options` keep settings,
-plugins and slash commands out of a call, the eval harness is `evals.py`, and `.claude/` holds the hooks
-and rules that stop a bad edit before it lands.
+GitHub Actions runs the gate, SAST, an SBOM, secret scanning and a dependency audit. The harness the team works in is part of the system too. The Agent SDK options in `agents._options` keep settings, plugins and slash commands out of a call. The eval harness is `evals.py`. `.claude/` holds the hooks and rules that stop a bad edit before it lands.
 
 ## Trust boundaries
 

@@ -10,18 +10,18 @@ model call passes through.
 
 ## Decision
 
-`gateway.py` is a small service of our own that speaks the Anthropic Messages API (`/v1/messages`,
-streaming and not). The Agent SDK reaches it by setting `ANTHROPIC_BASE_URL`, so no agent code changes.
+`gateway.py` is a small service of our own. It speaks the Anthropic Messages API (`/v1/messages`,
+streaming and not). The Agent SDK reaches it by setting `ANTHROPIC_BASE_URL`. So no agent code changes.
 
 - **Virtual keys.** An agent holds `vk.<tenant>.<agent>.<secret>`, never the provider key. Only the
-  sha256 of the key is stored, under row-level security. The tenant comes from the prefix and is proved
-  by the hash lookup inside that tenant, so a forged prefix finds nothing.
+  sha256 of the key is stored, under row-level security. The tenant comes from the prefix. The hash lookup
+  inside that tenant proves it. So a forged prefix finds nothing.
 - **Per call checks.** The key (401), the model allowlist, Haiku 5.5 and Sonnet 5.5 only (400), and the
   key's budget (429).
-- **Failover.** Upstreams are tried in order on 429, 5xx and connection errors. When all fail the caller
+- **Failover.** Upstreams are tried in order on 429, 5xx and connection errors. When all fail, the caller
   gets a 502 and the failure is logged.
-- **Spend log.** One `spend_log` row per call: tenant, agent, release, prompt version, case, model,
-  upstream, status, tokens, cost and latency. The release comes from `MI_RELEASE`; case and prompt
+- **Spend log.** One `spend_log` row per call. It holds tenant, agent, release, prompt version, case, model,
+  upstream, status, tokens, cost and latency. The release comes from `MI_RELEASE`. Case and prompt
   version travel as `x-mi-*` headers. The release registry (P5.1) reads this table to show whether a
   release improved.
 - **Run modes.** Live runs start the gateway inside the process (`gateway.embedded`). Production runs
@@ -29,11 +29,7 @@ streaming and not). The Agent SDK reaches it by setting `ANTHROPIC_BASE_URL`, so
 
 ## Why not LiteLLM
 
-The plan preferred a LiteLLM proxy, with a thin gateway as the fallback if vetting failed. It failed
-on three counts. The newest release was one day old (1.106.6, 2026-10-28). It ships several builds a
-day, so a pin goes stale at once. Its container and dependency tree is heavy for a 16 GB laptop that
-already runs Postgres, Temporal, Valkey and Floci. We need four features, so the cost of ownership is
-about 250 lines and a table.
+The plan preferred a LiteLLM proxy. A thin gateway was the fallback if vetting failed. It failed on three counts. The newest release was one day old (1.106.6, 2026-10-28). It ships several builds a day, so a pin goes stale at once. Its container and dependency tree is heavy for a 16 GB laptop that already runs Postgres, Temporal, Valkey and Floci. We need four features. So the cost of ownership is about 250 lines and a table.
 
 ## Consequences
 

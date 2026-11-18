@@ -4,11 +4,7 @@ Status: accepted, 29 October 2026. Supersedes DynamoDB as the store for cases, c
 
 ## Context
 
-The platform serves several client companies. A query that forgets a tenant filter must not leak another
-client's data, and a model call or a new route must not be able to cause that. The next steps also need
-full-text and vector search over approved content, joins across cases and HCPs, and one transaction per
-state change. DynamoDB held documents by id, with no tenant, no search and no joins. The hash-chained
-ledger keeps DynamoDB and S3 Object Lock, because it is append-only and needs no queries.
+The platform serves several client companies. A query that forgets a tenant filter must not leak another client's data. A model call or a new route must not be able to cause that. The next steps also need full-text and vector search over approved content. They need joins across cases and HCPs. They need one transaction per state change. DynamoDB held documents by id. It had no tenant, no search and no joins. The hash-chained ledger keeps DynamoDB and S3 Object Lock. It is append-only and needs no queries.
 
 ## Decision
 
@@ -32,13 +28,8 @@ Postgres 17 with the pgvector extension (image `pgvector/pgvector:0.8.1-pg17`, A
 
 ## Consequences
 
-Every new table needs a policy, and the structural test fails until it has one. Connections are opened
-per transaction for now; a pool comes with load. A tenant is region-pinned by running its stack in that
-region, which the CDK step covers.
+Every new table needs a policy. The structural test fails until it has one. For now, connections open once per transaction. A pool comes with load. A tenant is pinned to a region by running its stack in that region. The CDK step covers this.
 
 ## Enforced by
 
-`tests/test_tenancy.py`: every table forces RLS with a tenant policy, the app role cannot bypass it, a second
-tenant cannot read or write the first's rows, a write for another tenant is refused, and no tenant means no
-rows. A static test reads the migrations, and a mutant in `scripts/mutate.py` removes `FORCE` and the suite
-must fail.
+`tests/test_tenancy.py` checks these. Every table forces RLS with a tenant policy. The app role cannot bypass it. A second tenant cannot read or write the first tenant's rows. A write for another tenant is refused. No tenant means no rows. A static test reads the migrations. A mutant in `scripts/mutate.py` removes `FORCE`, and the suite must fail.

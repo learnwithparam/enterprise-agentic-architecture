@@ -56,3 +56,10 @@ every other. Put it back.
 
 One more policy per new table, checked by the schema walk in `tests/test_tenancy.py`, and a migration that
 cannot land without it.
+
+## New words
+
+- **row level security**: A database rule that shows each user only the rows they own.
+- **RLS policy**: The rule that says which rows a role may read or write.
+- **tenant**: One client company whose data is kept apart from the others.
+- **migration**: A saved change to the database layout.

@@ -31,8 +31,8 @@ flowchart TD
 
 ## Steps
 
-1. Count the question and the newest message. If they do not fit, a person takes the case.
-2. Walk back from the newest message and keep each one that fits. Stop at the first that does not.
+1. The question and the newest message must stay.
+2. Walk back from the newest message and stop at the first one that does not fit.
 
 These are the `# Step` comments in `fit_thread`.
 
@@ -65,3 +65,10 @@ Put it back.
 
 `tests/test_live_g_context.py` runs a real case. It checks the model prompt stays under the budget and that
 the ledger entry `context_trimmed` names how many messages were dropped.
+
+## New words
+
+- **token**: A small piece of text that a model counts and charges for.
+- **token budget**: The most tokens one model call may use.
+- **thread**: The chain of messages in one case.
+- **context window**: The amount of text a model can read at once.

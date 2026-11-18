@@ -43,6 +43,7 @@ check: up      ## the gate: tests, evals, mutants, prose, web build, mermaid, CS
 	uv run python scripts/mutate.py
 	uv run python scripts/check_prose.py
 	uv run python scripts/check_readable.py
+	uv run python scripts/check_docs_plain.py
 	$(MAKE) web
 	cd web && npx playwright-core install --only-shell --no-remove chromium > /dev/null
 	node web/scripts/check-mermaid.mjs

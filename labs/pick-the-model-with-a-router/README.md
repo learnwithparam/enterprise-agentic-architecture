@@ -57,3 +57,10 @@ case would loop on Sonnet forever instead of reaching a person. Put it back.
 
 Every routing decision is traced with its reason, and the AI gateway meters each call by tenant, agent
 and release, so the cost of the router itself shows on the Releases page.
+
+## New words
+
+- **router**: A function that picks which model handles a call.
+- **task class**: The kind of job a call does, such as screening or planning.
+- **escalate**: Move up to the stronger model.
+- **allowlist**: The short list of models the system may call.

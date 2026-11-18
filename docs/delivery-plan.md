@@ -5,9 +5,7 @@ description: How the case study is delivered as real work, from the first conver
 
 # Delivery plan
 
-The case study is the first three weeks of a real engagement, compressed. Each stage ends with an artifact
-in this repository and a named person who has to agree with it. A stage is closed by evidence, not by a
-date; the days are a plan, and the plan moves when the evidence says so.
+The case study is the first three weeks of a real engagement, squeezed into one page. Each stage ends with an artifact in this repository. A named person has to agree with it. Evidence closes a stage, not a date. The days are a plan. The plan moves when the evidence says so.
 
 | Stage | Days | Closes when | Artifact |
 |---|---|---|---|
@@ -20,17 +18,13 @@ date; the days are a plan, and the plan moves when the evidence says so.
 
 ## Listen, days 1 to 2
 
-**Who:** the head of medical information, a German medical reviewer, the pharmacovigilance intake lead,
-a brand lead, the CRM owner, a compliance officer and the platform team on AWS.
+**Who:** the head of medical information, a German medical reviewer, the pharmacovigilance intake lead, a brand lead, the CRM owner, a compliance officer and the platform team on AWS.
 
-**Ask each of them:** what happened the last time a question went wrong, what they would need to see before
-trusting a reply that no human read, and which number they are judged on.
+**Ask each of them:** what happened the last time a question went wrong, what they would need to see before trusting a reply that no human read, and which number they are judged on.
 
-**Produce:** the problem statement in Part A section 1, written so each of them recognises their own words,
-and the six riskiest assumptions ranked by how much of the design falls over if each one is false.
+**Produce:** the problem statement in Part A section 1, written so each of them recognises their own words, and the six riskiest assumptions ranked by how much of the design falls over if each one is false.
 
-**The trap to avoid:** designing the agent before knowing whether approved content exists as reusable
-blocks. If it does not, the first release is a content project, and the plan says so on day two.
+**The trap to avoid:** designing the agent before knowing whether approved content exists as reusable blocks. If it does not, the first release is a content project, and the plan says so on day two.
 
 ## Test the riskiest assumptions, days 3 to 5
 
@@ -45,48 +39,32 @@ Each assumption gets the cheapest test that could prove it false.
 | Country rules can be written as data | Write the German label scope, promotional cap and disclosure as TOML with a reviewer | The reviewer reads it and agrees it is the rule |
 | Claude runs where the data must stay | Check Bedrock availability for Haiku 5.5 in the EU regions with the platform team | A region and an inference profile are named |
 
-A failed test changes the plan the same day. The slice in this repository assumes every test passed and
-uses synthetic data shaped like what each test should find.
+A failed test changes the plan the same day. The slice in this repository assumes every test passed. It uses synthetic data shaped like what each test should find.
 
 ## Decide the architecture, days 4 to 6
 
-Write one ADR per decision that would be expensive to reverse, with the options considered and the failure
-each one prevents. The seven in `docs/adr/` are the decisions for this slice. Each names the test that
-enforces it, so the decision cannot quietly drift once the code exists.
+Write one ADR for each decision that would cost a lot to reverse. List the options considered and the failure each one prevents. The seven in `docs/adr/` are the decisions for this slice. Each names the test that enforces it. So the decision cannot quietly drift once the code exists.
 
-Review them with the architect who owns the AWS landing zone and with Compliance in one session, because the
-two groups reject different things: the architect rejects new moving parts, Compliance rejects anything it
-cannot audit.
+Review them in one session with the architect who owns the AWS landing zone and with Compliance. The two groups reject different things. The architect rejects new moving parts. Compliance rejects anything it cannot audit.
 
 ## Build the slice, days 6 to 12
 
 Build in the order that makes the riskiest part real first.
 
-1. **The routing table and its tests.** Safety rules first. Nothing else is worth building if an adverse
-   event can reach a send.
-2. **The content store and grounding check.** A reply that is not traced sentence by sentence to current
-   approved content is never sent, so this check exists before any agent does.
-3. **The three agents, in replay.** Record each agent once on Haiku 5.5, then build everything else against
-   the recordings so the build costs nothing and gives the same result every time.
-4. **Guards, Cedar and the ledger.** Every tool call and every human action goes through a policy and lands
-   on the hash chain.
-5. **Handoffs, HCP 360 and the console.** The parts people see last, because they change most once people
-   see them.
+1. **The routing table and its tests.** Safety rules first. Nothing else is worth building if an adverse event can reach a send.
+2. **The content store and grounding check.** A reply that is not traced sentence by sentence to current approved content is never sent, so this check exists before any agent does.
+3. **The three agents, in replay.** Record each agent once on Haiku 5.5, then build everything else against the recordings so the build costs nothing and gives the same result every time.
+4. **Guards, Cedar and the ledger.** Every tool call and every human action goes through a policy and lands on the hash chain.
+5. **Handoffs, HCP 360 and the console.** The parts people see last, because they change most once people see them.
 6. **The eval gate.** Twenty inquiries with expected routes, one missed adverse event fails the release.
 
-**Mutation run, day 12.** Break each safety property in the code one at a time (drop a routing rule, skip
-the send time check, let another country's block through, accept another model id) and confirm a test fails
-for every one. A mutant that survives is a missing test, and the slice is not done until it is written.
+**Mutation run, day 12.** Break each safety property in the code one at a time (drop a routing rule, skip the send time check, let another country's block through, accept another model id). Confirm a test fails for every one. A mutant that survives is a missing test. The slice is not done until it is written.
 
 ## Review with Compliance and Medical, days 13 to 14
 
-Walk the product walkthrough screen by screen, with the refusals first: the adverse event that is not
-answered, the off-label question, the injection, the field rep who cannot read a case, the withdrawn block
-that blocks an approved send, the reviewer from the wrong country, the tampered ledger. Each refusal is a
-sign-off line with a name next to it.
+Walk the product walkthrough screen by screen. Start with the refusals. They are the adverse event that is not answered, the off-label question, the injection, the field rep who cannot read a case, the withdrawn block that blocks an approved send, the reviewer from the wrong country and the tampered ledger. Each refusal is a sign-off line with a name next to it.
 
-Medical reviews every content block the slice uses and every reply the eval set produces. Pharmacovigilance
-confirms the fields the safety event carries are the fields their intake needs.
+Medical reviews every content block the slice uses. It also reviews every reply the eval set produces. Pharmacovigilance confirms that the fields the safety event carries are the fields its intake needs.
 
 ## Read out, day 15
 
@@ -98,8 +76,7 @@ Forty minutes with the steering group.
 4. The first release scope and the success measures from Part A section 5 (five minutes).
 5. The open questions only they can answer (five minutes).
 
-The readout ends with one decision: which country, product and channels go first, and who in that country
-can clear a topic for automatic replies.
+The readout ends with one decision. Which country, product and channels go first? Who in that country can clear a topic for automatic replies?
 
 ## After the readout
 

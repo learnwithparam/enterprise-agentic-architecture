@@ -65,3 +65,10 @@ lead would use a United States block for a German doctor. Put it back.
 
 `outreach.ask_for_content` is the lead's entry point. It reads the content store as it is now, and the
 ledger entry names the case, the blocks and every problem, so Compliance can replay the delegation.
+
+## New words
+
+- **brief**: The small set of facts handed to a helper for one question.
+- **specialist**: A helper step that answers one sub-question.
+- **block**: A piece of approved text that a reply may quote.
+- **ledger**: The saved record of what the system did.

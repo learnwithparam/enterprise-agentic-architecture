@@ -4,27 +4,25 @@ Status: accepted, 29 October 2026.
 
 ## Context
 
-SQS can deliver a message twice, a publisher can retry and send an event twice, and a handler can fail.
-Before this change `events.drain` deleted a message before its handler ran, so a crash lost the event, and
-nothing stopped a duplicate from running twice.
+SQS can deliver a message twice. A publisher can retry and send an event twice. A handler can fail. Before this change, `events.drain` deleted a message before its handler ran. So a crash lost the event. Nothing stopped a duplicate from running twice.
 
 ## Decision
 
-- Every event carries `event_id` and `tenant`. `publish(..., key=)` lets a caller choose the id, so a
+- Every event carries `event_id` and `tenant`. `publish(..., key=)` lets a caller choose the id. So a
   retried publish is the same event.
-- `events.consume(queue, handler)` runs the handler inside the event's tenant, and deletes the message
+- `events.consume(queue, handler)` runs the handler inside the event's tenant. It deletes the message
   only after the handler has finished. A table `processed_events` (row-level security per tenant) records
-  `(tenant, event_id, queue)`, so a second delivery is deleted without running the handler again.
-- A failure puts the message back at once. After `MAX_ATTEMPTS` (3) tries the event goes to `dead_letters`
-  with its error and attempt count, and leaves the queue.
+  `(tenant, event_id, queue)`. So a second delivery is deleted without running the handler again.
+- A failure puts the message back at once. After `MAX_ATTEMPTS` (3) tries, the event goes to `dead_letters`
+  with its error and attempt count. It leaves the queue.
 - `events.replay(id)` republishes a parked event under its own id and marks it replayed. It works once.
-- Handlers must still be safe to repeat when they fail midway. `process_invalidations` is: eviction and
+- Handlers must still be safe to repeat when they fail midway. `process_invalidations` is safe. Eviction and
   re-verification give the same result the second time.
 
 ## Consequences
 
-- A crashed steward no longer loses a withdrawal; the message is still on the queue.
-- Operators can list and replay parked events. Their exposure as `/v1` routes and `hcp` commands comes
+- A crashed steward no longer loses a withdrawal. The message is still on the queue.
+- Operators can list and replay parked events. They get these as `/v1` routes and `hcp` commands
   with P5.4.
-- API idempotency keys on write routes arrive with the webhooks (P4.1), where a retrying sender needs them.
+- API idempotency keys on write routes arrive with the webhooks (P4.1). A retrying sender needs them there.
 - Enforced by `tests/test_events.py` and three mutants in `scripts/mutate.py`.
