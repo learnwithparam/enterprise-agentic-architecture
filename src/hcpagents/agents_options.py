@@ -6,8 +6,8 @@ import sys
 
 from hcpagents import world
 from hcpagents.agents_spec import AGENTS, MODEL, PROMPT_VERSION
-from hcpagents.agents_tools import run_tool
-from hcpagents.guards import audit_entry, pre_tool
+from hcpagents.agents_tools import checked_output, run_tool
+from hcpagents.guards import audit_entry, post_tool, pre_tool
 
 
 def gateway_env(agent: str, case: dict) -> dict:
@@ -27,8 +27,8 @@ def _cli_stderr(line: str) -> None:
         print(line, file=sys.stderr)
 
 
-def _text_result(tool_name: str, store: dict, args: dict) -> dict:
-    return {"content": [{"type": "text", "text": json.dumps(run_tool(store, tool_name, args))}]}
+def _text_result(tool_name: str, args: dict, case: dict, store: dict, audit) -> dict:
+    return {"content": [{"type": "text", "text": json.dumps(checked_output(tool_name, args, case, store, audit))}]}
 
 
 def _hook(agent: str, case: dict, store: dict, authorize, audit, tool_calls: list):
@@ -37,7 +37,8 @@ def _hook(agent: str, case: dict, store: dict, authorize, audit, tool_calls: lis
         allowed, reason = pre_tool(agent, name, tool_input, case, store, authorize)
         returned = []
         if allowed:
-            returned = [found["block_id"] for found in run_tool(store, name, tool_input)]
+            kept, _ = post_tool(run_tool(store, name, tool_input), case, store)
+            returned = [found["block_id"] for found in kept]
         tool_calls.append({"tool": name, "input": tool_input, "allowed": allowed, "reason": reason, "returned": returned})
         audit(audit_entry(agent, name, tool_input, allowed, reason, returned))
         if allowed:
@@ -54,11 +55,11 @@ def _tool_options(agent: str, case: dict, store: dict, authorize, audit, tool_ca
     @tool("search_approved_content", "Search current approved content blocks for one product and country with a question in plain words.",
           {"product": str, "country": str, "query": str})
     async def search_tool(args):
-        return _text_result("mcp__mi__search_approved_content", store, args)
+        return _text_result("mcp__mi__search_approved_content", args, case, store, audit)
 
     @tool("get_block", "Read one current approved content block by id.", {"block_id": str})
     async def get_tool(args):
-        return _text_result("mcp__mi__get_block", store, args)
+        return _text_result("mcp__mi__get_block", args, case, store, audit)
 
     check = _hook(agent, case, store, authorize, audit, tool_calls)
     return {

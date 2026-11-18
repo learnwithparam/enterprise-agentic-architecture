@@ -127,12 +127,15 @@ def _signature_ok(entry_hash: str, signature_hex: str) -> bool:
 
 def verify() -> dict:
     """Redo each hash and check each signed checkpoint. Gives back the first break, if any."""
+    # Step 1: Read every row of this chain.
     rows = _rows()
     prev, checkpoints = GENESIS, 0
     for row in rows:
+        # Step 2: Redo each hash and name the first row that does not match.
         if row["prev"] != prev or digest(prev, row["entry"]) != row["hash"]:
             return {"ok": False, "entries": len(rows), "broken_at": row["seq"],
                     "reason": f"Entry {row['seq']} does not match its hash. It was changed after it was written."}
+        # Step 3: Check the signature on each signed checkpoint.
         if row["signature"]:
             if not _signature_ok(row["hash"], row["signature"]):
                 return {"ok": False, "entries": len(rows), "broken_at": row["seq"],

@@ -315,6 +315,16 @@
      ]
     }
    },
+   "RevokeUser": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Ledger"
+     ]
+    }
+   },
    "ResetDemo": {
     "appliesTo": {
      "principalTypes": [

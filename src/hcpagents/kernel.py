@@ -64,11 +64,15 @@ def escalation(error: Exception) -> dict:
 
 def advance(facts: dict, done: list[str], node: str, out: dict) -> dict | None:
     """Record a finished step. Return the decision once the facts imply a route, else None."""
+    # Step 1: The step may set only its own facts.
     check_facts(node, out["facts"])
+    # Step 2: Record the facts and the finished step.
     facts.update(out["facts"])
     done.append(node)
+    # Step 3: Ask the graph if the facts imply a route.
     decision = graph.decide(facts)
     if decision:
+        # Step 4: The kernel checks that route again.
         check_route(facts, decision["route"])
     return decision
 

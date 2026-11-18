@@ -16,7 +16,8 @@ from hcpagents import db, identity_spec, revocation, world
 from hcpagents.aws import ENDPOINT, REGION, client, is_local
 
 CLI_REDIRECT = identity_spec.CLI_REDIRECT  # where the hcp CLI waits for the sign-in code
-LEEWAY = 0  # seconds of slack for the clock. Tests make it negative to test a late token.
+LEEWAY = 10  # Seconds of clock slack. The identity provider's clock can run a second ahead, so a fresh token reads "not yet valid".
+# Tests make it negative to test a late token.
 
 
 class Unauthenticated(Exception):
@@ -97,6 +98,7 @@ def verify(token: str) -> dict:
         claims = jwt.decode(token, key, algorithms=["RS256"], issuer=issuer(), audience=[client_id(), cli_client_id()],
                             leeway=LEEWAY, options={"require": ["exp", "iss", "aud", "sub"]})
     except Exception as error:
+        print(f"token refused: {type(error).__name__}: {error}", file=sys.stderr)  # The caller only sees "Sign in again".
         raise Unauthenticated("Sign in again") from error
     if claims.get("token_use") != "id":
         raise Unauthenticated("Not an ID token")
@@ -110,6 +112,7 @@ def verify(token: str) -> dict:
     try:
         revocation.check(tenant, uid)
     except revocation.Revoked as error:
+        print(f"user refused: {error} ({error.__cause__!r})", file=sys.stderr)
         raise Unauthenticated(str(error)) from error
     return {"id": uid, "name": claims["name"], "role": claims["custom:role"], "country": claims["custom:country"],
             "title": person["title"], "tenant": tenant}

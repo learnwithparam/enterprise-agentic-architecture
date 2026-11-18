@@ -11,7 +11,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
-from hcpagents import authz, cases, db, events, releases, store
+from hcpagents import auth, authz, cases, db, events, ledger, releases, store, world
 
 router = APIRouter(prefix="/v1")
 WAITING = {"awaiting_review"}
@@ -112,3 +112,26 @@ def promote(release: str, user: dict = Depends(current_user)):
     except (LookupError, ValueError) as error:
         raise HTTPException(409, str(error)) from error
     return {"baseline": release}
+
+
+def _change_access(user: dict, user_id: str, change, event: str) -> dict:
+    """Revoke or reinstate one user of this tenant. Only compliance may. The ledger records who did it."""
+    _may(user, "RevokeUser", "Ledger", "main")
+    person = world.person(user_id)
+    if person is None or person.get("tenant", db.DEFAULT_TENANT) != user["tenant"]:
+        raise HTTPException(404, f"No user {user_id}")
+    if user_id == user["id"]:
+        raise HTTPException(409, "You cannot change your own access")
+    change(user["tenant"], user_id)
+    ledger.append({"type": event, "user": user_id, "by": user["id"]})
+    return {"user": user_id, "status": event}
+
+
+@router.post("/users/{user_id}/revoke")
+def revoke(user_id: str, user: dict = Depends(current_user)):
+    return _change_access(user, user_id, auth.revoke_user, "access_revoked")
+
+
+@router.post("/users/{user_id}/reinstate")
+def reinstate(user_id: str, user: dict = Depends(current_user)):
+    return _change_access(user, user_id, auth.reinstate_user, "access_reinstated")

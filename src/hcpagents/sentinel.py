@@ -20,18 +20,23 @@ def _interaction(interaction_id: str) -> dict | None:
 
 
 def _perceive(event: dict) -> bool:
+    # Step 1: Read the note and run the safety screen.
     row = _interaction(event["interaction"])
     hits = []
     if row:
         hits = rules.safety_screen(row["body"])
+    # Step 2: A note with no hit is left alone.
     if not hits:
         return False
     case = f"pv-{row['id']}"
+    # Step 3: Hand the signal to pharmacovigilance.
     events.publish("SafetySignal", {"case": case, "channel": row["channel"], "interaction": row["id"],
                                     "hcp": row["hcp_id"], "signals": hits}, key=case)
+    # Step 4: Freeze contact with that doctor.
     if row["hcp_id"]:
         store.put("mi-freezes", {"id": f"freeze-{row['id']}", "hcp": row["hcp_id"], "case": case,
                                  "interaction": row["id"], "at": datetime.now(UTC).isoformat(timespec="seconds")})
+    # Step 5: Write the signal to the ledger.
     ledger.append({"type": "sentinel_signal", "agent": "safety-sentinel", "case": case, "channel": row["channel"],
                    "interaction": row["id"], "frozen": bool(row["hcp_id"]), "kinds": sorted({hit["kind"] for hit in hits})})
     return True

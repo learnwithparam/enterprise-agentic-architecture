@@ -65,17 +65,28 @@ class Case:
 
     def refuse_over_cap(self, name: str) -> None:
         """Stop before a model call that a cap forbids. The refusal goes to the ledger, then to a person."""
-        why = agent_caps.check(self.doc["agent_calls"])
+        why = agent_caps.check(self.doc["agent_calls"]) or agent_caps.reserve()
         if why:
             self.audit({"type": "cap_refused", "agent": name, "why": why})
             raise agent_caps.CapExceeded(f"{name}: {why}")
 
+    def charge_failed_run(self, name: str, attempts: int) -> None:
+        """A run that ended in review still made its calls. They count against today and against this case."""
+        agent_caps.settle(attempts)
+        if attempts:
+            self.doc["agent_calls"].append({"agent": name, "key": None, "mode": "failed", "usage": {}, "cost_usd": 0.0,
+                                            "tool_calls": [], "attempts": attempts, "input_tokens_est": 0})
+
     async def agent(self, name: str, prompt: str) -> dict:
         self.refuse_over_cap(name)
         case_ref = {"id": self.doc["id"], "country": self.doc["country"], "product": self.doc["product"]}
-        record = await agents.call(name, prompt, case_ref, self.content, authz.agent_can_call, self.audit)
+        try:
+            record = await agents.call(name, prompt, case_ref, self.content, authz.agent_can_call, self.audit)
+        except agents.EscalateToHuman as gave_up:
+            self.charge_failed_run(name, gave_up.attempts)
+            raise
         attempts = record.get("attempts", 1)
-        agent_caps.charge(attempts)
+        agent_caps.settle(attempts)
         self.doc["agent_calls"].append({"agent": name, "key": record["key"], "mode": record["mode"], "usage": record["usage"],
                                         "cost_usd": record["cost_usd"], "tool_calls": record["tool_calls"],
                                         "attempts": attempts, "input_tokens_est": agent_context.count_tokens(prompt)})

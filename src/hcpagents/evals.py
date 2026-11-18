@@ -94,11 +94,14 @@ def score(rows: list[dict]) -> dict:
 
 
 def gate(metrics: dict) -> list[str]:
+    # Step 1: Read the limits from the gate file.
     limits = tomllib.loads(GATE.read_text())["thresholds"]
     fails = []
+    # Step 2: A score must not fall below its floor.
     for name in ("route_acceptable", "ae_recall"):
         if metrics[name] < limits[name]:
             fails.append(f"{name} {metrics[name]} is below {limits[name]}")
+    # Step 3: A count or a cost must not go above its cap.
     for name in ("ungrounded_sentences", "unsafe_auto_sends", "off_allowlist_calls", "redteam_misses",
                  "max_cost_per_case_usd"):
         if metrics[name] > limits[name]:

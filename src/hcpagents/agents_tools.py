@@ -1,6 +1,7 @@
 """The two tools the assembler agent may call. Both only read approved content."""
 
 from hcpagents import retrieval, world
+from hcpagents.guards import post_tool
 
 SEARCH_RESULTS = 4  # Blocks one search returns. Enough to compare, few enough to read.
 
@@ -23,3 +24,11 @@ def run_tool(store: dict, tool: str, tool_input: dict) -> list[dict]:
         query = tool_input.get("query") or tool_input.get("topic", "")
         return search(tool_input.get("product", ""), tool_input.get("country", ""), query)
     return get_block(store, tool_input.get("block_id", ""))
+
+
+def checked_output(tool: str, tool_input: dict, case: dict, store: dict, audit) -> list[dict]:
+    """What the model may read from a tool. Blocks that fail the check after the tool ran are dropped and go to the ledger."""
+    kept, dropped = post_tool(run_tool(store, tool, tool_input), case, store)
+    if dropped:
+        audit({"type": "tool_output_dropped", "tool": tool, "input": tool_input, "dropped": dropped})
+    return kept

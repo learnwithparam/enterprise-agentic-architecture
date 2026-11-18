@@ -159,6 +159,20 @@ def dlq_replay(dead_letter_id: int):
 
 
 @app.command()
+def revoke(user_id: str):
+    """Stop a user now. Their token is refused on the next call. Only compliance may."""
+    with client() as session:
+        show(session.post(f"/v1/users/{user_id}/revoke"))
+
+
+@app.command()
+def reinstate(user_id: str):
+    """Let a revoked user back in. Only compliance may."""
+    with client() as session:
+        show(session.post(f"/v1/users/{user_id}/reinstate"))
+
+
+@app.command()
 def releases():
     """Eval metrics, cost and spend per release."""
     with client() as session:

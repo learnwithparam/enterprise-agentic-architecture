@@ -35,6 +35,11 @@ def install(monkeypatch, inquiry: dict | None = None, content: dict | None = Non
     def put(table, doc):
         rig.documents[f"{table}/{doc['id']}"] = doc
 
+    def add_to(table, doc_id, field, amount):
+        document = rig.documents.setdefault(f"{table}/{doc_id}", {"id": doc_id})
+        document[field] = document.get(field, 0) + amount
+        return document[field]
+
     async def call(name, prompt, case_ref, store_content, authorize, audit):
         rig.prompts.append(prompt)
         reply = rig.replies.pop(0)
@@ -44,6 +49,7 @@ def install(monkeypatch, inquiry: dict | None = None, content: dict | None = Non
     monkeypatch.setattr(ledger, "append", append)
     monkeypatch.setattr(store, "get", get)
     monkeypatch.setattr(store, "put", put)
+    monkeypatch.setattr(store, "add_to", add_to)
     monkeypatch.setattr(store, "content", lambda: blocks)
     monkeypatch.setattr(agents, "call", call)
     case = case_core.Case(inquiry or INQUIRY)

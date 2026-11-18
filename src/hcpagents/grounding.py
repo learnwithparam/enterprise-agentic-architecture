@@ -81,10 +81,12 @@ def _segment_problems(segments: list[dict], product: str, country_code: str, sto
 
 def verify(segments: list[dict], product: str, country_code: str, store: dict[str, dict], today=TODAY) -> dict:
     """Check the reply against the store. Gives back evidence for each sentence and the list of problems."""
+    # Step 1: Keep only the blocks for this product and country.
     allowed = [
         block for block in store.values()
         if block["country"] in (country_code, "ALL") and block["product"] in (product, "ALL")
     ]
+    # Step 2: List which blocks hold each sentence.
     index: dict[str, list[dict]] = {}
     for block in allowed:
         for sentence in sentences(block["text"]):
@@ -92,10 +94,12 @@ def verify(segments: list[dict], product: str, country_code: str, store: dict[st
 
     problems: list[str] = []
     evidence = []
+    # Step 3: Trace each sentence of the reply to a current block.
     for sentence in sentences(render(segments)):
         row, problem = _evidence(sentence, index.get(sentence, []), today)
         evidence.append(row)
         if problem:
             problems.append(problem)
+    # Step 4: Check each block against the store as it is now.
     problems += _segment_problems(segments, product, country_code, store, today)
     return {"grounded": not problems, "sentences": evidence, "problems": list(dict.fromkeys(problems))}

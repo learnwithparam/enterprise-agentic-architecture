@@ -40,13 +40,13 @@ def thread_sha(thread: list[dict]) -> str:
 
 def fit_thread(thread: list[dict], question: str, budget: int = CONTEXT_BUDGET_TOKENS) -> dict:
     """Keep the question and the newest message. Then add older messages, newest first, while they fit."""
-    # Step 1: the question and the newest message must stay.
+    # Step 1: The question and the newest message must stay.
     must = count_tokens(question)
     if thread:
         must += count_tokens(turn_text(thread[-1]))
     if must > budget:
         raise ContextTooLarge(f"The question and the newest message need {must} tokens; the budget is {budget}")
-    # Step 2: walk back from the newest message and stop at the first one that does not fit.
+    # Step 2: Walk back from the newest message and stop at the first one that does not fit.
     used = must
     kept = thread[-1:]
     for turn in reversed(thread[:-1]):

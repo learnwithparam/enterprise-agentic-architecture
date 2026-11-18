@@ -34,20 +34,26 @@ class Decision:
 
 
 def route(task: str, risk: str = "low", budget_left_usd: float = 1.0, prior: tuple[Outcome, ...] = ()) -> Decision:
+    # Step 1: Refuse a task or a risk that is not known.
     if task not in HAIKU_TASKS | SONNET_TASKS:
         raise ValueError(f"Unknown task class {task!r}")
     if risk not in RISKS:
         raise ValueError(f"Unknown risk {risk!r}")
+    # Step 2: A person takes the call once Sonnet has failed it.
     tried = {outcome.model for outcome in prior}
     if SONNET in tried:
         return Decision(None, "Sonnet already failed this call; a human takes it")
+    # Step 3: Work out if an earlier try calls for Sonnet.
     escalate = any(outcome.result == SCHEMA_FAILURE or (outcome.result == LOW_CONFIDENCE and risk == "high")
                    for outcome in prior)
     wants_sonnet = task in SONNET_TASKS or escalate
+    # Step 4: Narrow work stays on Haiku.
     if not wants_sonnet:
         return Decision(HAIKU, f"{task} is high-volume work; Haiku is the default")
+    # Step 5: A person takes the call when the budget is too low for Sonnet.
     if budget_left_usd < SONNET_CALL_ESTIMATE_USD:
         return Decision(None, f"Sonnet needed for {task} but ${budget_left_usd:.4f} is left on the case")
+    # Step 6: Pick Sonnet and say why.
     why = f"{task} weighs options"
     if escalate:
         why = "after a failed Haiku try"

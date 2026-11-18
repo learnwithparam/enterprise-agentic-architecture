@@ -37,12 +37,17 @@ def delegate(case_id: str, hcp: dict, product: str, topic: str | None, text: str
              step: Callable[[dict], dict] = specialist, record: Callable[[dict], object] | None = None) -> dict:
     """Brief the specialist, check what it returns, and write the outcome to the ledger."""
     record = record or ledger.append
+    # Step 1: The brief holds one country and one product, and no doctor.
     brief = context.for_question(hcp, product, topic, text, content)
+    # Step 2: The specialist gets a copy of the brief and nothing else.
     answer = step(copy.deepcopy(brief))
+    # Step 3: The lead refuses a block that is not in the brief or not current.
     problems = check(brief, answer, content)
+    # Step 4: Write the outcome to the ledger.
     record({"type": "delegation", "agent": "lead", "to": "specialist", "case": case_id,
             "accepted": not problems, "blocks": answer.get("block_ids", []), "problems": problems})
     usable = answer.get("block_ids", [])
+    # Step 5: A bad answer gives no block.
     if problems:
         usable = []
     return {"accepted": not problems, "block_ids": usable, "problems": problems}

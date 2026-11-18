@@ -34,11 +34,14 @@ def description_hash(tool) -> str:
 
 def pinned(tools: tuple, pins: dict) -> list:
     """The tools whose description is as it was pinned. The rest are named in DISABLED and never served."""
+    # Step 1: Forget the tools left out last time.
     DISABLED.clear()
     served = []
     for tool in tools:
+        # Step 2: A tool that matches its pin is served.
         if pins.get(tool.__name__) == description_hash(tool):
             served.append(tool)
+        # Step 3: Name a changed tool and skip it.
         else:
             DISABLED.append(tool.__name__)
     return served

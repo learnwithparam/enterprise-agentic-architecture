@@ -52,11 +52,15 @@ NODES: list[tuple[str, tuple[str, ...]]] = [
 
 def decide(facts: dict) -> dict | None:
     """Return the route for these facts, or None while a fact the next rule needs is unknown."""
+    # Step 1: Walk the rules in order.
     for index, (fact, value, route, why) in enumerate(ROUTING):
+        # Step 2: Stop while a fact the rule needs is unknown.
         if fact not in facts:
             return None
+        # Step 3: The first rule that matches gives the route.
         if facts[fact] == value:
             return {"route": route, "rule": index, "fact": fact, "why": why}
+    # Step 4: No rule matched, so the reply may be sent.
     return {"route": SEND[0], "rule": len(ROUTING), "fact": None, "why": SEND[1]}
 
 

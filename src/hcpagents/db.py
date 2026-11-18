@@ -73,8 +73,11 @@ DEFAULT_TENANT, current_tenant, as_tenant = world.DEFAULT_TENANT, world.current_
 @contextmanager
 def session():
     """One transaction as the current tenant."""
+    # Step 1: Open one transaction as the app user.
     with psycopg.connect(_app_url(), row_factory=dict_row) as conn, conn.transaction():
+        # Step 2: Tell the database which tenant this is, so its row rules apply.
         conn.execute("SELECT set_config('app.tenant_id', %s, true)", (current_tenant(),))
+        # Step 3: Hand the connection to the caller.
         yield conn
 
 

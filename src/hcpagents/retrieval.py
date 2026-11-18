@@ -84,6 +84,7 @@ def _best_first(score: dict[str, float]) -> list[str]:
 
 
 def _rank(query: str, product: str, country: str, topic: str | None, limit: int, mode: str) -> list[dict]:
+    # Step 1: Turn the question into words and a vector.
     embedder = embeddings.embedder()
     params = {"product": product, "country": country, "today": world.TODAY, "topic": topic,
               "words": " | ".join(re.findall(r"\w+", query.lower())) or "''",
@@ -91,14 +92,17 @@ def _rank(query: str, product: str, country: str, topic: str | None, limit: int,
               "pool": max(limit * 4, 20)}
     with db.session() as conn:
         full_text, by_vector = [], []
+        # Step 2: Rank inside the facet gate by text and by vector.
         if mode != "vector":
             full_text = _full_text(conn, params)
         if mode != "fts":
             by_vector = _by_vector(conn, params)
+        # Step 3: Join the two ranks with rank fusion.
         score: dict[str, float] = {}
         for ranked in (full_text, by_vector):
             for rank, row in enumerate(ranked, start=1):
                 score[row["id"]] = score.get(row["id"], 0.0) + 1.0 / (RRF_K + rank)
+        # Step 4: Keep the best blocks and read them.
         top = _best_first(score)[:limit]
         by_id = {row["id"]: row["doc"] for row in conn.execute(
             "SELECT id, doc FROM docs WHERE kind = 'content' AND id = ANY(%s)", (top,))}

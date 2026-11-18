@@ -45,16 +45,16 @@ def _usable(block_id: str, seen: set[str], content: dict[str, dict], product: st
 
 async def verify_with_one_redraft(ids: list[str], check: Check, redraft: Redraft) -> dict:
     """Check the reply. If it fails, redraft once and check again. The second verdict stands."""
-    # Step 1: check the first reply.
+    # Step 1: Check the first reply.
     segments, verification = check(ids)
     if verification["grounded"]:
         return {"segments": segments, "verification": verification, "redrafts": 0, "first_problems": []}
-    # Step 2: redraft once, told what failed.
+    # Step 2: Redraft once, told what failed.
     first_problems = verification["problems"]
     new_ids = await redraft(first_problems)
     if not new_ids:
         failed = verification | {"grounded": False, "problems": [*first_problems, "The redraft chose no usable block"]}
         return {"segments": segments, "verification": failed, "redrafts": 1, "first_problems": first_problems}
-    # Step 3: check the redraft. Its verdict stands, grounded or not.
+    # Step 3: Check the redraft. Its verdict stands, grounded or not.
     segments, verification = check(new_ids)
     return {"segments": segments, "verification": verification, "redrafts": 1, "first_problems": first_problems}

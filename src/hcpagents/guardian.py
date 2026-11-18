@@ -48,15 +48,20 @@ def override_rates(since: datetime | None = None) -> dict[str, dict]:
 
 def patrol(since: datetime | None = None) -> list[dict]:
     """Lower each country whose reviewers reject too much. Gives back what it lowered. Run it again and it lowers nothing."""
+    # Step 1: Read the limits.
     limits = world.autonomy_seed()["guardian"]
     lowered = []
+    # Step 2: Look at each country's override rate.
     for country, rate in override_rates(since).items():
+        # Step 3: Skip a country with too few decisions or a low rate.
         if rate["reviewed"] < limits["min_decisions"] or rate["override_rate"] <= limits["max_override_rate"]:
             continue
         setting = cases.autonomy_setting(country)
         if not setting["enabled"]:
             continue
+        # Step 4: Turn its auto replies off.
         cases.save_autonomy(country, setting | {"enabled": False})
+        # Step 5: Write what was lowered to the ledger.
         ledger.append({"type": "guardian_lowered", "country": country, "override_rate": rate["override_rate"],
                        "reviewed": rate["reviewed"], "limit": limits["max_override_rate"]})
         lowered.append({"country": country, **rate})

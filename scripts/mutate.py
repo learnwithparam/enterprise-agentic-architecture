@@ -4,6 +4,7 @@ A mutant that survives means the property has no test that bites; the run fails 
 Each mutant names the narrowest check that should catch it, so the run takes seconds, not minutes.
 """
 
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -46,6 +47,9 @@ MUTANTS = [
     ("A token for another app is refused", "src/hcpagents/auth.py",
      'audience=[client_id(), cli_client_id()],\n                            leeway=LEEWAY, options={"require": ["exp", "iss", "aud", "sub"]})', 'options={"verify_aud": False})',
      [*PYTEST, "tests/test_flow.py::test_a_token_for_another_audience_is_refused"]),
+    ("A token from a clock a few seconds ahead is accepted", "src/hcpagents/auth.py",
+     'LEEWAY = 10', 'LEEWAY = 0',
+     [*PYTEST, "tests/test_clock_skew.py::test_a_token_from_a_clock_a_few_seconds_ahead_is_accepted"]),
     ("A token whose tenant claim differs from the directory is refused", "src/hcpagents/auth.py",
      'if claims.get("custom:tenant") != tenant:', 'if False:',
      [*PYTEST, "tests/test_oauth.py::test_wrong_tenant_token_refused"]),
@@ -446,7 +450,23 @@ MUTANTS = [
     ("A case stops at the model call cap", "src/hcpagents/agent_caps.py",
      "if calls_made(agent_calls) >= MAX_CALLS_PER_CASE:", "if False:", [*PYTEST, "tests/test_live_g_caps.py"]),
     ("A tenant stops at its day cap", "src/hcpagents/agent_caps.py",
-     "if calls_today() >= day_cap:", "if False:", [*PYTEST, "tests/test_live_g_caps.py"]),
+     "if calls_today() >= day_cap:", "if False:",
+     [*PYTEST, "tests/test_atomic_day_cap.py::test_check_alone_refuses_a_tenant_at_the_day_cap"]),
+    ("Workers racing for the last calls of the day cannot pass the cap", "src/hcpagents/agent_caps.py",
+     'if store.add_to(USAGE_TABLE, day_id(), "calls", 1) > day_cap:', 'if store.add_to(USAGE_TABLE, day_id(), "calls", 1) > day_cap + 1000:',
+     [*PYTEST, "tests/test_atomic_day_cap.py::test_ten_workers_racing_for_five_calls_leave_exactly_five_through"]),
+    ("A run that ends in review is still charged for its calls", "src/hcpagents/case_core.py",
+     "        agent_caps.settle(attempts)\n        if attempts:", "        if attempts:",
+     [*PYTEST, "tests/test_atomic_day_cap.py::test_a_run_that_fails_twice_and_goes_to_review_is_charged_for_both_calls"]),
+    ("Only compliance may revoke a user", "src/hcpagents/v1.py",
+     '_may(user, "RevokeUser", "Ledger", "main")', "pass",
+     [*PYTEST, "tests/test_revocation_routes.py::test_compliance_revokes_a_user_and_the_next_call_with_their_token_is_refused_until_they_are_reinstated"]),
+    ("A block for another country never reaches the model", "src/hcpagents/guards.py",
+     'return block["country"] == case["country"] and block["product"] == case["product"]', "return True",
+     [*PYTEST, "tests/test_post_tool.py::test_a_block_for_another_country_is_dropped_and_the_ledger_says_so"]),
+    ("The check after a tool runs also drops blocks that are no longer approved", "src/hcpagents/guards.py",
+     "if block and world.is_current(block) and _fits_case(block, case):", "if block and _fits_case(block, case):",
+     [*PYTEST, "tests/test_post_tool.py::test_a_block_that_is_no_longer_approved_is_dropped"]),
     ("The cap is checked before every model call", "src/hcpagents/case_core.py",
      "        self.refuse_over_cap(name)", "        pass", [*PYTEST, "tests/test_live_g_caps.py"]),
     ("The question and newest turn always stay in the thread", "src/hcpagents/agent_context.py",
@@ -486,22 +506,61 @@ MUTANTS = [
 ]
 
 
+USAGE = "usage: mutate.py   (no arguments: it runs every mutant)"
+PENDING: list[tuple[Path, str]] = []  # The file being mutated now and its real text, so a signal can put it back.
+
+
+def put_back(*_signal_args) -> None:
+    """Restore the file that is mutated right now. A killed run must never leave a mutation behind."""
+    while PENDING:
+        path, text = PENDING.pop()
+        path.write_text(text)
+    if _signal_args:
+        sys.exit(130)
+
+
+def problems() -> list[str]:
+    """Check every mutant before touching any file. A leftover mutation from a killed run shows up here by name."""
+    found = []
+    for prop, rel, old, new, _check in MUTANTS:
+        text = (ROOT / rel).read_text()
+        if text.count(old) == 1:
+            continue
+        if text.count(new) == 1:
+            found.append(f"'{prop}': {rel} still holds the mutated text. A killed run left it. Restore the file first.")
+        else:
+            found.append(f"'{prop}': the text is no longer in {rel}. Update scripts/mutate.py.")
+    return found
+
+
+def run_one(prop: str, rel: str, old: str, new: str, check: list[str]) -> bool:
+    """Mutate one file, run its check, put the file back. True when the check caught it."""
+    path = ROOT / rel
+    real = path.read_text()
+    PENDING.append((path, real))
+    path.write_text(real.replace(old, new))
+    try:
+        result = subprocess.run(check, cwd=ROOT, capture_output=True, text=True)
+    finally:
+        put_back()
+    caught = result.returncode != 0
+    print(f"{'killed  ' if caught else 'SURVIVED'} {prop} ({rel})")
+    return caught
+
+
 def main() -> int:
+    if len(sys.argv) > 1:
+        print(USAGE)
+        return 0 if sys.argv[1] in ("-h", "--help") else 2
+    found = problems()
+    if found:
+        print("mutate: not started.\n" + "\n".join(found))
+        return 1
+    signal.signal(signal.SIGINT, put_back)
+    signal.signal(signal.SIGTERM, put_back)
     survived = 0
     for prop, rel, old, new, check in MUTANTS:
-        p = ROOT / rel
-        orig = p.read_text()
-        if orig.count(old) != 1:
-            print(f"mutate: the text for '{prop}' is no longer in {rel}; update scripts/mutate.py")
-            return 1
-        p.write_text(orig.replace(old, new))
-        try:
-            r = subprocess.run(check, cwd=ROOT, capture_output=True, text=True)
-        finally:
-            p.write_text(orig)
-        caught = r.returncode != 0
-        survived += not caught
-        print(f"{'killed  ' if caught else 'SURVIVED'} {prop} ({rel})")
+        survived += not run_one(prop, rel, old, new, check)
     print(f"mutate: {len(MUTANTS) - survived} of {len(MUTANTS)} mutants killed")
     return 1 if survived else 0
 

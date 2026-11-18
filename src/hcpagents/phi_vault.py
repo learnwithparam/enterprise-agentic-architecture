@@ -97,9 +97,12 @@ def _close(case_id: str, vault: dict) -> None:
 
 def tokenise(text: str, case_id: str) -> str:
     """The text for the model. Personal values are tokens, and the real values are sealed in the case vault."""
+    # Step 1: Open the vault of this case.
     vault = _open(case_id)
     before = dict(vault)
+    # Step 2: Swap each personal value for one token.
     safe = swap_out(text, vault)
+    # Step 3: Seal the vault again if it grew.
     if vault != before:
         _close(case_id, vault)
     return safe

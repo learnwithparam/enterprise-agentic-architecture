@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from hcpagents import router, world
 from hcpagents.agents_options import gateway_env, options as _options
 from hcpagents.agents_spec import AGENT_TASK, AGENTS, MODEL, PROMPT_VERSION
-from hcpagents.agents_tools import SEARCH_RESULTS, get_block, run_tool, search
+from hcpagents.agents_tools import SEARCH_RESULTS, checked_output, get_block, run_tool, search
 from hcpagents.guards import audit_entry, pre_tool
 from hcpagents.router import HAIKU, SONNET
 
@@ -47,7 +47,10 @@ class AgentFailed(RuntimeError):
 
 
 class EscalateToHuman(RuntimeError):
-    """The router has no model left to try, or no budget for one. The case goes to review."""
+    """The router has no model left to try, or no budget for one. The case goes to review.
+    The calls already made on the way here are in attempts, so they are still counted against the caps."""
+
+    attempts = 0
 
 
 class BudgetError(RuntimeError):
@@ -74,7 +77,9 @@ def cost_usd(usage: dict, model: str = MODEL) -> float:
 
 
 def check_models(model_usage: dict | None) -> None:
+    # Step 1: Find every model the run used that is not on the list.
     others = sorted(set(model_usage or {}) - ALLOWED_MODELS)
+    # Step 2: Refuse the run and name those models.
     if others:
         raise ModelPolicyError(f"Run used {others}; only {sorted(ALLOWED_MODELS)} are allowed")
 
@@ -127,7 +132,9 @@ async def call(agent: str, user_prompt: str, case: dict, store: dict, authorize,
         budget_left = SPEND.per_case - SPEND.cases.get(case["id"], 0.0)
         decision = router.route(task, risk, budget_left, tuple(prior))
         if decision.model is None:
-            raise EscalateToHuman(f"{agent}: {decision.reason}")
+            gave_up = EscalateToHuman(f"{agent}: {decision.reason}")
+            gave_up.attempts = len(prior)
+            raise gave_up
         try:
             reply = await _call_on(decision.model, agent, user_prompt, case, store, authorize, audit)
             return reply | {"routing": decision.reason, "attempts": len(prior) + 1}
@@ -159,7 +166,8 @@ def _replay(agent: str, user_prompt: str, model: str, case: dict, store: dict, a
         allowed, reason = pre_tool(agent, tool_call["tool"], tool_call["input"], case, store, authorize)
         returned = []
         if allowed:
-            returned = [found["block_id"] for found in run_tool(store, tool_call["tool"], tool_call["input"])]
+            kept = checked_output(tool_call["tool"], tool_call["input"], case, store, audit)
+            returned = [found["block_id"] for found in kept]
         audit(audit_entry(agent, tool_call["tool"], tool_call["input"], allowed, reason, returned))
         tool_call |= {"allowed_now": allowed, "returned_now": returned}
     return recording | {"mode": "replay"}

@@ -112,12 +112,15 @@ class ReviewWorkflow:
     @workflow.run
     async def run(self, args: dict) -> dict:
         """Takes the tenant, the case id and maybe the deadline in seconds."""
+        # Step 1: Take the deadline from the caller, or use the default.
         sla = REVIEW_SLA
         if args.get("sla_seconds"):
             sla = timedelta(seconds=args["sla_seconds"])
+        # Step 2: Wait for a person to close the case until the deadline.
         try:
             await workflow.wait_condition(self._is_closed, timeout=sla)
         except asyncio.TimeoutError:
+            # Step 3: At the deadline, escalate the case and keep waiting.
             self.escalated = True
             await workflow.execute_activity("escalate_case", {**args, "sla_seconds": sla.total_seconds()},
                                             start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
