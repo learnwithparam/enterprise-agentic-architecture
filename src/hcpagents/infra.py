@@ -12,7 +12,7 @@ import sys
 
 from botocore.exceptions import ClientError
 
-from hcpagents import cache, db, graph, identity_spec, ingest, retrieval, store, world
+from hcpagents import auth, cache, db, graph, identity_spec, ingest, retrieval, store, world
 from hcpagents.aws import REGION, client
 
 TABLES = {"mi-ledger": ("chain", "seq")}  # everything else lives in Postgres (db.py)
@@ -254,6 +254,12 @@ def _seed_tenant(reset: bool):
         retrieval.index()
 
 
+def reinstate_seed_users():
+    """A reset puts every demo user back to active. A test that stopped half way cannot lock out the next run."""
+    for user in world.directory():
+        auth.reinstate_user(user.get("tenant", world.DEFAULT_TENANT), user["id"])
+
+
 def provision(reset: bool = False):
     db.migrate()
     tables()
@@ -269,6 +275,7 @@ def provision(reset: bool = False):
     seed(reset)
     if reset:
         cache.flush_tenant("*")  # a reset reseeds each tenant, so old answers are stale
+        reinstate_seed_users()
 
 
 if __name__ == "__main__":

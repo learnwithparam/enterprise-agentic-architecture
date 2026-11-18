@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from hcpagents import api, cli, infra
+from hcpagents import api, auth, cli, infra, world
 from tests.test_flow import as_user
 
 pytestmark = pytest.mark.floci
@@ -33,3 +33,11 @@ def test_an_unknown_user_is_404_and_nobody_may_revoke_themselves():
 def test_the_cli_has_a_command_for_each_route():
     names = {command.name or command.callback.__name__ for command in cli.app.registered_commands}
     assert {"revoke", "reinstate"} <= names
+
+
+def test_a_reset_puts_a_revoked_demo_user_back_so_a_half_run_test_cannot_lock_out_the_next():
+    infra.provision(reset=True)
+    auth.revoke_user(world.DEFAULT_TENANT, "u-raman")
+    infra.provision(reset=True)
+    assert as_user("u-raman")["Authorization"].startswith("Bearer ")
+    assert TestClient(api.app).get("/v1/cases", headers=as_user("u-raman")).status_code == 200

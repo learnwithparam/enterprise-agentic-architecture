@@ -16,12 +16,16 @@ KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 def signed_at(seconds_from_now: int) -> str:
     issued = int(time.time()) + seconds_from_now
-    claims = {"iss": "i", "aud": "a", "sub": "s", "iat": issued, "exp": issued + 3600}
+    return signed({"iat": issued, "exp": issued + 3600})
+
+
+def signed(times: dict) -> str:
+    claims = {"iss": "i", "aud": "a", "sub": "s", **times}
     return jwt.encode(claims, KEY, algorithm="RS256")
 
 
 def decode(token: str) -> dict:
-    return jwt.decode(token, KEY.public_key(), algorithms=["RS256"], issuer="i", audience=["a"], leeway=auth.LEEWAY)
+    return auth.decode(token, KEY.public_key(), "i", ["a"])
 
 
 def test_a_token_from_a_clock_a_few_seconds_ahead_is_accepted():
@@ -31,3 +35,9 @@ def test_a_token_from_a_clock_a_few_seconds_ahead_is_accepted():
 def test_a_token_from_a_clock_a_minute_ahead_is_refused():
     with pytest.raises(jwt.ImmatureSignatureError):
         decode(signed_at(60))
+
+
+def test_a_token_that_expired_a_moment_ago_is_refused():
+    now = int(time.time())
+    with pytest.raises(jwt.ExpiredSignatureError):
+        decode(signed({"iat": now - 3600, "exp": now - 3}))

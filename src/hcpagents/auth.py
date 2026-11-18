@@ -6,6 +6,7 @@ The tenant never comes from the caller. It comes from our own directory, so a to
 """
 
 import sys
+import time
 from datetime import UTC, datetime
 from functools import cache
 
@@ -16,7 +17,7 @@ from hcpagents import db, identity_spec, revocation, world
 from hcpagents.aws import ENDPOINT, REGION, client, is_local
 
 CLI_REDIRECT = identity_spec.CLI_REDIRECT  # where the hcp CLI waits for the sign-in code
-LEEWAY = 10  # Seconds of clock slack. The identity provider's clock can run a second ahead, so a fresh token reads "not yet valid".
+LEEWAY = 10  # Seconds a token may be issued in the future. The provider's clock can run ahead. Expiry gets no slack.
 # Tests make it negative to test a late token.
 
 
@@ -91,12 +92,21 @@ def login(user_id: str, password: str, mfa_code: str | None = None) -> str:
     return result["AuthenticationResult"]["IdToken"]
 
 
+def decode(token: str, key, issuer: str, audience: list[str]) -> dict:
+    """Check the signature, issuer, audience and expiry. Expiry gets no slack, so a token ends when it says.
+    Only the issued-at time gets slack. A clock that runs ahead makes a fresh token look new."""
+    claims = jwt.decode(token, key, algorithms=["RS256"], issuer=issuer, audience=audience,
+                        options={"require": ["exp", "iss", "aud", "sub"], "verify_aud": True, "verify_iat": False})
+    if claims.get("iat", 0) > time.time() + LEEWAY:
+        raise jwt.ImmatureSignatureError("The token is issued too far in the future")
+    return claims
+
+
 def verify(token: str) -> dict:
     """Return the signed-in user, or raise Unauthenticated. The token must be signed, fresh and meant for us."""
     try:
         key = _keys().get_signing_key_from_jwt(token).key
-        claims = jwt.decode(token, key, algorithms=["RS256"], issuer=issuer(), audience=[client_id(), cli_client_id()],
-                            leeway=LEEWAY, options={"require": ["exp", "iss", "aud", "sub"]})
+        claims = decode(token, key, issuer(), [client_id(), cli_client_id()])
     except Exception as error:
         print(f"token refused: {type(error).__name__}: {error}", file=sys.stderr)  # The caller only sees "Sign in again".
         raise Unauthenticated("Sign in again") from error
