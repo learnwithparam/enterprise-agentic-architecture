@@ -10,8 +10,9 @@ from datetime import UTC, datetime
 from functools import cache
 
 import jwt
+from botocore.exceptions import ClientError
 
-from hcpagents import db, identity_spec, world
+from hcpagents import db, identity_spec, revocation, world
 from hcpagents.aws import ENDPOINT, REGION, client, is_local
 
 CLI_REDIRECT = identity_spec.CLI_REDIRECT  # where the hcp CLI waits for the sign-in code
@@ -106,8 +107,34 @@ def verify(token: str) -> dict:
     tenant = person.get("tenant", db.DEFAULT_TENANT)
     if claims.get("custom:tenant") != tenant:
         raise WrongTenant(f"The token names tenant {claims.get('custom:tenant')!r}, not {tenant!r}")
+    try:
+        revocation.check(tenant, uid)
+    except revocation.Revoked as error:
+        raise Unauthenticated(str(error)) from error
     return {"id": uid, "name": claims["name"], "role": claims["custom:role"], "country": claims["custom:country"],
             "title": person["title"], "tenant": tenant}
+
+
+def _tell_identity_provider(action: str, user_id: str) -> None:
+    """Turn the user off or on at the identity provider. A local emulator may not know these calls."""
+    try:
+        getattr(client("cognito-idp"), action)(UserPoolId=pool(), Username=user_id)
+    except ClientError:
+        if not is_local():
+            raise
+
+
+def revoke_user(tenant: str, user_id: str) -> None:
+    """Stop this user now. Their tokens are refused on the next call, and they cannot sign in again."""
+    revocation.add(tenant, user_id)
+    _tell_identity_provider("admin_disable_user", user_id)
+    _tell_identity_provider("admin_user_global_sign_out", user_id)
+
+
+def reinstate_user(tenant: str, user_id: str) -> None:
+    """Let a revoked user back in."""
+    revocation.remove(tenant, user_id)
+    _tell_identity_provider("admin_enable_user", user_id)
 
 
 def reauthenticate(user: dict, password: str) -> dict:

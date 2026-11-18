@@ -50,6 +50,11 @@ def _secret(kind: str, ident: str) -> bytes:
     return _get(name)
 
 
+def tenant_key(kind: str, ident: str) -> bytes:
+    """A tenant key for other modules that seal data. It is made on first use."""
+    return _secret(kind, ident)
+
+
 def pseudonym(subject: str) -> str:
     pepper = _secret("pepper", "tenant")
     return hmac.new(pepper, subject.encode(), hashlib.sha256).hexdigest()[:20]

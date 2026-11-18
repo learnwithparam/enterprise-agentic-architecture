@@ -28,18 +28,22 @@ class State(TypedDict):
     rejected: list[str]
 
 
-def _prompt(product: str, country: str, questions: list[dict], retry: list[str]) -> str:
+def _prompt(product: str, country: str, questions: list[dict], retry: list[str], rejected: list[str] | None = None) -> str:
     body = {"product": product, "country": country,
             "questions": [{"text": question["text"], "topic": question["topic"]} for question in questions]}
     if retry:
         body["retry"] = {"not_covered": retry, "note": "Search again for these using different words from the question."}
+    if retry and rejected:
+        body["retry"]["refused_ids"] = sorted(set(rejected))
+        body["retry"]["refused_note"] = ("These ids were refused. A search did not return them for this product and country. "
+                                         "Choose only ids a search returns.")
     return json.dumps(body)
 
 
 def build(ask: Ask, product: str, country: str, questions: list[dict], content: dict[str, dict]):
     async def select(state: State) -> dict:
         kernel.check_attempt(state["attempt"] + 1, MAX_ATTEMPTS)
-        out, seen = await ask(_prompt(product, country, questions, state["uncovered"]))
+        out, seen = await ask(_prompt(product, country, questions, state["uncovered"], state["rejected"]))
         seen = state["seen"] | seen
         answers, rejected = [], list(state["rejected"])
         for answer in out["answers"]:

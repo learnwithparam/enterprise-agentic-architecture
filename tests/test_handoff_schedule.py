@@ -24,3 +24,18 @@ def test_the_handoff_task_drains_a_review_event_into_the_reviewer_queue():
     handled = asyncio.run(activities.handoff_tick({}))
     assert handled["mi-medical-review"] == 1
     assert store.get("mi-reviewer-queue", "review-inq-sched")["status"] == "waiting"
+
+
+def test_the_steward_runs_the_doctor_sweep_each_cycle():
+    assert activities.sweep_tick in durable.ACTIVITIES
+    assert 'execute_activity("sweep_tick"' in inspect.getsource(workflows.ContentStewardWorkflow)
+    source = inspect.getsource(activities.sweep_tick)
+    assert "sentinel.scan_doctors" in source and "outreach.run_all" in source
+
+
+@pytest.mark.floci
+def test_the_sweep_task_covers_every_tenant_and_every_doctor():
+    out = asyncio.run(activities.sweep_tick({}))
+    assert set(out) == {"quillon", "marlowe"}
+    for result in out.values():
+        assert result["signals"] and result["outreach"]

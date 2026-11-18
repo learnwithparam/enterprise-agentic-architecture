@@ -8,7 +8,7 @@ It acts alone only to lower risk. It can freeze, but it can never lift a freeze.
 
 from datetime import UTC, datetime
 
-from hcpagents import db, events, ledger, rules, store
+from hcpagents import db, events, ledger, parallel, rules, store
 
 QUEUE = "mi-interactions"
 
@@ -19,13 +19,13 @@ def _interaction(interaction_id: str) -> dict | None:
                             (interaction_id,)).fetchone()
 
 
-def _perceive(event: dict) -> None:
+def _perceive(event: dict) -> bool:
     row = _interaction(event["interaction"])
     hits = []
     if row:
         hits = rules.safety_screen(row["body"])
     if not hits:
-        return
+        return False
     case = f"pv-{row['id']}"
     events.publish("SafetySignal", {"case": case, "channel": row["channel"], "interaction": row["id"],
                                     "hcp": row["hcp_id"], "signals": hits}, key=case)
@@ -34,8 +34,32 @@ def _perceive(event: dict) -> None:
                                  "interaction": row["id"], "at": datetime.now(UTC).isoformat(timespec="seconds")})
     ledger.append({"type": "sentinel_signal", "agent": "safety-sentinel", "case": case, "channel": row["channel"],
                    "interaction": row["id"], "frozen": bool(row["hcp_id"]), "kinds": sorted({hit["kind"] for hit in hits})})
+    return True
 
 
 def perceive() -> int:
     """Screen each interaction waiting on the queue. Gives back how many it read."""
     return events.consume(QUEUE, _perceive)
+
+
+def _sweep(hcp_id: str) -> int:
+    """Screen every note of one doctor that has no freeze yet. Gives back how many signals it raised."""
+    with db.session() as conn:
+        rows = conn.execute("SELECT id FROM interactions WHERE hcp_id = %s ORDER BY id", (hcp_id,)).fetchall()
+    raised = 0
+    for row in rows:
+        if store.get("mi-freezes", f"freeze-{row['id']}") is None:
+            raised += _perceive({"interaction": row["id"]})
+    return raised
+
+
+def _job(hcp_id: str):
+    def work() -> int:
+        return _sweep(hcp_id)
+
+    return work
+
+
+def scan_doctors(hcp_ids: list[str], timeout_s: float = parallel.TIMEOUT_S) -> dict:
+    """Catch up on many doctors at once, one worker each. A failed or late worker is recorded and never blocks the rest."""
+    return parallel.fan_out({hcp_id: _job(hcp_id) for hcp_id in hcp_ids}, timeout_s)

@@ -5,7 +5,11 @@ It has also set the tenant and charged the rate limit by the time a tool runs.
 Each tool then asks Cedar if this user may call it. So a tool is a policy decision, not only a function.
 """
 
+import hashlib
+import inspect
+import json
 import os
+from pathlib import Path
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -15,8 +19,29 @@ from hcpagents import authz, cases, db, releases, store
 TOOLS = {"list_cases": "no", "get_case": "no", "release_trend": "yes"}  # name -> sensitive
 
 
+PIN_FILE = Path(__file__).with_name("mcp_pins.json")
+DISABLED: list[str] = []  # tools left out at start because their description no longer matches its pin
+
+
 class ToolDenied(Exception):
     pass
+
+
+def description_hash(tool) -> str:
+    """The fingerprint of a tool: its name and the description a client's model reads."""
+    return hashlib.sha256(f"{tool.__name__}\n{inspect.getdoc(tool)}".encode()).hexdigest()
+
+
+def pinned(tools: tuple, pins: dict) -> list:
+    """The tools whose description is as it was pinned. The rest are named in DISABLED and never served."""
+    DISABLED.clear()
+    served = []
+    for tool in tools:
+        if pins.get(tool.__name__) == description_hash(tool):
+            served.append(tool)
+        else:
+            DISABLED.append(tool.__name__)
+    return served
 
 
 def _by_id(case: dict) -> str:
@@ -63,7 +88,8 @@ def build() -> FastMCP:
     """A fresh server. Its session manager runs once, so each app lifespan builds one."""
     server = FastMCP("hcp-platform", stateless_http=True, json_response=True, streamable_http_path="/",
                      transport_security=TransportSecuritySettings(allowed_hosts=HOSTS, allowed_origins=["*"]))
-    for tool in (list_cases, get_case, release_trend):
+    pins = json.loads(PIN_FILE.read_text())
+    for tool in pinned((list_cases, get_case, release_trend), pins):
         server.tool()(tool)
     return server
 
@@ -77,3 +103,9 @@ class Mount:
 
 
 mount = Mount()
+
+
+if __name__ == "__main__":
+    # Run this once a person has read a changed description.
+    reviewed = (list_cases, get_case, release_trend)
+    PIN_FILE.write_text(json.dumps({tool.__name__: description_hash(tool) for tool in reviewed}, indent=2) + "\n")

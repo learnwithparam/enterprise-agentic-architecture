@@ -7,7 +7,7 @@ So a step can run on any worker after any crash (ADR 0016).
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from hcpagents import agents, cases, handoff_workers, ingest, world
+from hcpagents import agents, cases, handoff_workers, ingest, outreach, sentinel, world
 from hcpagents.kernel import ORDER, KernelViolation, escalation
 
 
@@ -41,6 +41,17 @@ async def steward_tick(_args: dict) -> dict:
 async def handoff_tick(_args: dict) -> dict:
     """One pass of the handoff teams. Each event names its tenant, so one pass serves every tenant."""
     return handoff_workers.run_once()
+
+
+@activity.defn
+async def sweep_tick(_args: dict) -> dict:
+    """One pass over every doctor of every tenant. Each doctor gets one worker. It looks for safety signals and plans outreach."""
+    done = {}
+    for tenant in world.tenants():
+        with world.as_tenant(tenant["id"]):
+            doctors = [hcp["id"] for hcp in world.hcp_world()["hcp"]]
+            done[tenant["id"]] = {"signals": sentinel.scan_doctors(doctors), "outreach": outreach.run_all(doctors)}
+    return done
 
 
 @activity.defn

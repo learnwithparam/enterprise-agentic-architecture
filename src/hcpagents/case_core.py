@@ -3,7 +3,7 @@
 import json
 import uuid
 
-from hcpagents import agents, authz, db, grounding, ledger, plan, rules, store, world
+from hcpagents import agent_caps, agent_context, agent_redraft, agents, authz, db, grounding, ledger, plan, rules, store, world
 
 
 def autonomy_setting(country: str) -> dict:
@@ -63,18 +63,42 @@ class Case:
     def span(self, name: str, inp, out, usage=None, model=None) -> None:
         self.doc["trace"]["spans"].append({"name": name, "input": inp, "output": out, "usage": usage, "model": model})
 
+    def refuse_over_cap(self, name: str) -> None:
+        """Stop before a model call that a cap forbids. The refusal goes to the ledger, then to a person."""
+        why = agent_caps.check(self.doc["agent_calls"])
+        if why:
+            self.audit({"type": "cap_refused", "agent": name, "why": why})
+            raise agent_caps.CapExceeded(f"{name}: {why}")
+
     async def agent(self, name: str, prompt: str) -> dict:
+        self.refuse_over_cap(name)
         case_ref = {"id": self.doc["id"], "country": self.doc["country"], "product": self.doc["product"]}
         record = await agents.call(name, prompt, case_ref, self.content, authz.agent_can_call, self.audit)
+        attempts = record.get("attempts", 1)
+        agent_caps.charge(attempts)
         self.doc["agent_calls"].append({"agent": name, "key": record["key"], "mode": record["mode"], "usage": record["usage"],
-                                        "cost_usd": record["cost_usd"], "tool_calls": record["tool_calls"]})
+                                        "cost_usd": record["cost_usd"], "tool_calls": record["tool_calls"],
+                                        "attempts": attempts, "input_tokens_est": agent_context.count_tokens(prompt)})
         if record["mode"] == "live":
             self.doc["mode"] = "live"
         self.span(f"agent.{name}", prompt, record["output"], record["usage"], record["model"])
         self.audit({"type": "agent_call", "agent": name, "model": record["model"], "routing": record["routing"],
-                    "prompt_version": agents.PROMPT_VERSION, "recording": record["key"], "mode": record["mode"]},
+                    "prompt_version": agents.PROMPT_VERSION, "recording": record["key"], "mode": record["mode"],
+                    "input_tokens_est": agent_context.count_tokens(prompt), "attempts": attempts},
                    private={"output": record["output"]})
         return record["output"]
+
+    def full_text(self) -> str:
+        """The question with the whole thread. The plain rule screens read all of it, even what the model does not."""
+        lines = [agent_context.turn_text(turn) for turn in self.inq.get("thread") or []]
+        return "\n".join([*lines, self.inq["text"]])
+
+    def thread_text(self) -> str:
+        """What the model reads: the question and the part of the thread that fits the budget. The ledger notes the trim."""
+        text, note = agent_context.model_text(self.inq)
+        if note["dropped"]:
+            self.audit({"type": "context_trimmed", **note})
+        return text
 
     # ------------------------------------------------------------ graph nodes
 
@@ -87,9 +111,9 @@ class Case:
         return {"facts": {"verified_hcp": verified}, "detail": detail}
 
     async def safety_screen(self, _context) -> dict:
-        text = self.inq["text"]
+        text = self.full_text()
         hits = rules.safety_screen(text)
-        out = await self.agent("safety", f"{untrusted_header()}\n{agents.untrusted(text)}")
+        out = await self.agent("safety", f"{untrusted_header()}\n{agents.untrusted(self.thread_text())}")
         for signal in out["signals"]:
             hits.append({"kind": signal["kind"].replace("_", " "), "quote": signal["quote"], "source": "safety agent",
                          "quote_found": signal["quote"].lower() in text.lower()})
@@ -97,8 +121,8 @@ class Case:
         return {"facts": {"ae": bool(hits)}, "detail": hits}
 
     async def classify(self, _context) -> dict:
-        text = self.inq["text"]
-        out = await self.agent("triage", f"{untrusted_header()}\n{agents.untrusted(text)}")
+        text = self.full_text()
+        out = await self.agent("triage", f"{untrusted_header()}\n{agents.untrusted(self.thread_text())}")
         rule_hits = rules.injection_screen(text)
         self.doc["product"] = None
         if out["product"] != "unknown":
@@ -113,27 +137,41 @@ class Case:
         result = rules.scope_check(self.doc["product"], self.doc["country"], self.doc["questions"])
         return {"facts": {"in_scope": result["in_scope"]}, "detail": result}
 
+    async def ask_assembler(self, prompt: str) -> tuple[dict, set[str]]:
+        out = await self.agent("assembler", prompt)
+        return out, _returned_ids(self.doc["agent_calls"][-1]["tool_calls"])
+
     async def assemble(self, _context) -> dict:
         doc = self.doc
-
-        async def ask(prompt: str) -> tuple[dict, set[str]]:
-            out = await self.agent("assembler", prompt)
-            return out, _returned_ids(doc["agent_calls"][-1]["tool_calls"])
-
-        doc["selection"] = await plan.run(ask, doc["product"], doc["country"], doc["questions"], self.content)
+        doc["selection"] = await plan.run(self.ask_assembler, doc["product"], doc["country"], doc["questions"], self.content)
         selection = doc["selection"]
         covered = (bool(selection["answers"]) and not selection["uncovered"]
                    and len(selection["answers"]) >= len(doc["questions"]))
         return {"facts": {"covered": covered}, "detail": selection}
+
+    def check_ids(self, ids: list[str]) -> tuple[list[dict], dict]:
+        doc = self.doc
+        segments = grounding.compose(doc["product"], doc["country"], ids, self.content)
+        return segments, grounding.verify(segments, doc["product"], doc["country"], self.content)
+
+    async def redraft(self, problems: list[str]) -> list[str]:
+        """One more pick of blocks, told what failed. The ledger records why."""
+        doc = self.doc
+        self.audit({"type": "redraft", "problems": problems})
+        prompt = agent_redraft.redraft_prompt(doc["product"], doc["country"], doc["questions"], problems)
+        out, seen = await self.ask_assembler(prompt)
+        return agent_redraft.usable_ids(out, seen, self.content, doc["product"], doc["country"], len(doc["questions"]))
 
     async def verify(self, _context) -> dict:
         doc = self.doc
         ids = []
         for answer in doc["selection"]["answers"]:
             ids.extend(answer["block_ids"])
-        segments = grounding.compose(doc["product"], doc["country"], ids, self.content)
+        result = await agent_redraft.verify_with_one_redraft(ids, self.check_ids, self.redraft)
+        segments = result["segments"]
         doc["draft"] = {"segments": segments, "text": grounding.render(segments)}
-        doc["verification"] = grounding.verify(segments, doc["product"], doc["country"], self.content)
+        doc["verification"] = result["verification"]
+        doc["redrafts"] = result["redrafts"]
         return {"facts": {"grounded": doc["verification"]["grounded"]}, "detail": doc["verification"]["problems"]}
 
     async def autonomy(self, _context) -> dict:

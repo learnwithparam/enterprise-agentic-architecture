@@ -3,7 +3,7 @@
 import contextlib
 from datetime import UTC, datetime
 
-from hcpagents import authz, cache, events, grounding, ledger, store, world
+from hcpagents import authz, cache, events, grounding, ledger, memory, store, world
 from hcpagents.case_core import Case, autonomy_setting, restore, save_autonomy
 from hcpagents.case_send import now, send
 
@@ -153,4 +153,5 @@ def erase_person(hcp_id: str, user: dict) -> dict:
     ledger.append({"type": "authz", "user": user["id"], "action": "ErasePerson", "allowed": allowed, "reason": why})
     if not allowed:
         raise Denied(f"{user['name']} may not erase personal data. {why}")
+    memory.forget(hcp_id)
     return ledger.erase_subject(hcp_id, user["id"])

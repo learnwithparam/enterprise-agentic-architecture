@@ -17,6 +17,50 @@ REQUIRED_TOPICS = [
 ]
 
 
+LIVE_LABS = [
+    'agent-loop',
+    'guardrails',
+    'gates',
+    'shapes',
+    'tool-schemas',
+    'shell-tool',
+    'mcp-basics',
+    'mcp-trust',
+    'three-doors',
+    'context-budget',
+    'history-trimming',
+    'retrieval',
+    'pick-context',
+    'instructions-vs-data',
+    'stop-conditions',
+    'error-feedback',
+    'plan-then-act',
+    'reflect-and-fix',
+    'run-state',
+    'tool-failures',
+    'crash-and-resume',
+    'budgets',
+    'model-routing',
+    'identity-and-scopes',
+    'act-for-user',
+    'hooks',
+    'traces-and-audit',
+    'evals-and-release',
+    'routing',
+    'chain-and-delegate',
+    'parallel-workers',
+    'subagent-isolation',
+    'handoffs',
+    'shared-memory',
+    'wakeups-and-board',
+    'hcp-360',
+    'phi-vault',
+    'fact-checker',
+    'revocation',
+    'end-to-end',
+]
+
+
 def _rows(path: Path) -> list[list[str]]:
     rows = []
     for line in path.read_text().splitlines():
@@ -161,3 +205,10 @@ def test_walkthrough_has_the_six_sections_and_two_diagrams():
     assert re.findall(r"^## (.+)$", text, re.M) == [
         "The problem", "What you build", "How it works", "Run it", "What to watch for", "Where to go next"]
     assert text.count("```mermaid") >= 2
+
+
+def test_every_live_lab_concept_has_a_row():
+    names = " ".join(row[0] for row in _coverage_rows())
+    missing = [slug for slug in LIVE_LABS if f"Live lab {slug}:" not in names]
+    assert not missing, missing
+    assert len(LIVE_LABS) == 40

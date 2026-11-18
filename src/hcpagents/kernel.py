@@ -56,7 +56,7 @@ def check_route(facts: dict, route: str) -> dict:
 
 def escalation(error: Exception) -> dict:
     """No model is left, or a plan broke the kernel, so a person decides. Nothing is drafted or sent."""
-    rule = "router_escalated"
+    rule = getattr(error, "rule", "router_escalated")
     if isinstance(error, KernelViolation):
         rule = "kernel_violation"
     return {"decision": {"route": "review", "rule": rule, "why": str(error)}, "facts": {}, "trace": []}

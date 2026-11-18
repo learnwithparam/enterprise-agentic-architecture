@@ -130,7 +130,7 @@ async def call(agent: str, user_prompt: str, case: dict, store: dict, authorize,
             raise EscalateToHuman(f"{agent}: {decision.reason}")
         try:
             reply = await _call_on(decision.model, agent, user_prompt, case, store, authorize, audit)
-            return reply | {"routing": decision.reason}
+            return reply | {"routing": decision.reason, "attempts": len(prior) + 1}
         except AgentFailed:
             prior.append(router.Outcome(decision.model, router.SCHEMA_FAILURE))
 

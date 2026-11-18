@@ -7,7 +7,7 @@ Each reason names the rule that fired and the case or touch behind it. Each hold
 So Compliance can see why a doctor was not contacted.
 """
 
-from hcpagents import authz, delivery, hcp360, ledger, store, supervisor, world
+from hcpagents import authz, delegation, delivery, hcp360, ledger, memory, parallel, store, supervisor, world
 
 
 class Denied(Exception):
@@ -56,6 +56,13 @@ def _reason(rule: str, why: str, cases: list[dict], freezes: list[dict]) -> dict
     return {"rule": rule, "why": why, "source": source}
 
 
+def _remember_hold(hcp_id: str, decision: dict) -> None:
+    """Leave a note for the other agents. Its source is the rule that held the touch."""
+    memory.remember({"id": f"hold-{decision['id']}", "hcp": hcp_id, "author": "outreach-coordinator",
+                     "text": f"{decision['id']} is held: {decision['reasons'][0]['why']}",
+                     "source": f"rule:{decision['reasons'][0]['rule']}", "expires_on": memory.expiry()})
+
+
 def run(hcp_id: str) -> list[dict]:
     """Coordinate, store the decision on the touch, and ledger each hold."""
     decisions = coordinate(hcp_id)
@@ -64,6 +71,7 @@ def run(hcp_id: str) -> list[dict]:
         if touch.get("coordinator") != decision["action"]:
             store.put("mi-touches", touch | {"coordinator": decision["action"], "reasons": decision["reasons"]})
             if decision["action"] == "hold":
+                _remember_hold(hcp_id, decision)
                 ledger.append({"type": "outreach_hold", "agent": "outreach-coordinator", "touch": decision["id"],
                                "hcp": hcp_id, "rules": [reason["rule"] for reason in decision["reasons"]]})
     return decisions
@@ -105,3 +113,22 @@ def approve(hcp_id: str, touch_ref: int | str, approver: dict) -> dict:
     ledger.append({"type": "outreach_sent", "touch": touch["id"], "hcp": hcp_id, "approved_by": approver["id"],
                    "delivery_id": message_id, "block": [block["id"], block["version"]]}, subject=hcp_id)
     return sent
+
+
+def run_all(hcp_ids: list[str], timeout_s: float = parallel.TIMEOUT_S) -> dict:
+    """Coordinate many doctors at once. A doctor whose worker fails or runs late is recorded and the rest finish."""
+    jobs = {hcp_id: _job(hcp_id) for hcp_id in hcp_ids}
+    return parallel.fan_out(jobs, timeout_s)
+
+
+def _job(hcp_id: str):
+    def work() -> list[dict]:
+        return run(hcp_id)
+
+    return work
+
+
+def ask_for_content(case_id: str, hcp_id: str, product: str, topic: str | None, text: str) -> dict:
+    """The lead hands one sub-question to the specialist step. It gets a narrow brief and the answer is checked."""
+    hcp = world.hcp(hcp_id)
+    return delegation.delegate(case_id, hcp, product, topic, text, store.content())

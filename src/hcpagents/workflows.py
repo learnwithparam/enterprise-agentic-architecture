@@ -145,6 +145,7 @@ class ContentStewardWorkflow:
             out = await workflow.execute_activity("steward_tick", {}, start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
             self.invalidated += len(out["cases"])
             await workflow.execute_activity("handoff_tick", {}, start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
+            await workflow.execute_activity("sweep_tick", {}, start_to_close_timeout=STEP_TIMEOUT, retry_policy=RETRY)
             await workflow.sleep(timedelta(seconds=args.get("poll_seconds", STEWARD_POLL_S)))
         workflow.continue_as_new(args)
 

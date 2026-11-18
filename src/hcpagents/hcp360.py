@@ -5,7 +5,7 @@ It also holds the rule that decides if a planned touch may go. The decision is f
 
 from datetime import date, timedelta
 
-from hcpagents import identity, store, world
+from hcpagents import identity, memory, store, world
 
 WINDOW_DAYS = 30
 CLOSED_STATUSES = ("sent", "declined", "rejected")
@@ -95,6 +95,7 @@ def view(hcp_id: str) -> dict:
         "timeline": done,
         "interactions": identity.interactions(hcp_id),
         "freezes": frozen,
+        "memory": memory.recall(hcp_id),
         "open_cases": cases,
         "planned": [touch | {"decision": planned_decision(touch, hcp, content, cases, done, frozen=frozen)}
                     for touch in sorted(planned, key=_planned_on)],

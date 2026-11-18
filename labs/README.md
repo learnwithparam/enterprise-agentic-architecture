@@ -28,3 +28,9 @@ uv run pytest -q labs  # every lab; make check runs them too
 | [Watch with the sentinel and steward](watch-with-the-sentinel-and-steward/) | Safety signals and draft invalidation happen with nobody asking | Yes, and Temporal |
 
 Read `docs/architecture-walkthrough.md` first for how the parts fit together.
+| [Delegate with a narrow brief](delegate-with-a-narrow-brief/) | A helper sees only the question's context and the lead checks its answer | No |
+| [Fit the thread to a token budget](fit-the-thread-to-a-token-budget/) | Old turns are dropped first and the question always stays | No |
+| [Cap model calls per case and day](cap-model-calls-per-case-and-day/) | A case and a tenant stop at a hard call limit | No |
+| [Redraft a failed check once](redraft-a-failed-check-once/) | A failed grounding check gets one redraft, then a person | No |
+| [Tokenise PHI with a vault](tokenise-phi-with-a-vault/) | The model sees tokens and the reply is restored from a sealed per-case vault | No |
+| [Pin MCP tools with description hashes](pin-mcp-tools-with-description-hashes/) | A tool whose description changed is not served | No |

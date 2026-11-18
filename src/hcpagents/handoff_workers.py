@@ -6,11 +6,12 @@ Each safety intake has a 24 hour clock. It starts when the signal came in.
 
 from datetime import UTC, datetime, timedelta
 
-from hcpagents import events, store
+from hcpagents import events, ledger, store
 from hcpagents.case_core import restore
 from hcpagents.infra import QUEUES
 
 DAY_ZERO = timedelta(hours=24)
+HANDOFFS = "mi-handoffs"
 
 
 def _now() -> datetime:
@@ -30,8 +31,36 @@ def _when(text: str | None) -> datetime:
     return moment
 
 
+def hand_off(sender: str, receiver: str, case_id: str, reason: str) -> dict:
+    """One bot hands a case to another. The record says who, to whom, which case and why, and it goes on the ledger.
+
+    The same handoff twice is one record.
+    """
+    for name, value in (("sender", sender), ("receiver", receiver), ("case", case_id), ("reason", reason)):
+        if not value:
+            raise ValueError(f"A handoff needs a {name}")
+    found = store.get(HANDOFFS, f"handoff-{receiver}-{case_id}")
+    if found:
+        return found
+    record = {"id": f"handoff-{receiver}-{case_id}", "from": sender, "to": receiver, "case": case_id, "reason": reason,
+              "status": "open", "at": _now().isoformat(timespec="seconds")}
+    store.put(HANDOFFS, record)
+    ledger.append({"type": "handoff", "agent": sender, "from": sender, "to": receiver, "case": case_id, "reason": reason})
+    return record
+
+
+def receive(receiver: str) -> list[dict]:
+    """The receiver reads its open handoffs and marks each one received. The ledger shows who read it."""
+    waiting = [record for record in store.scan(HANDOFFS) if record["to"] == receiver and record["status"] == "open"]
+    for record in waiting:
+        store.put(HANDOFFS, record | {"status": "received", "received_at": _now().isoformat(timespec="seconds")})
+        ledger.append({"type": "handoff_received", "agent": receiver, "from": record["from"], "case": record["case"]})
+    return waiting
+
+
 def review_needed(detail: dict) -> None:
     """Put the case in the reviewer queue and tell the reviewers."""
+    hand_off("inquiry-agent", "medical-reviewers", detail["case"], detail["why"])
     store.put("mi-reviewer-queue", {"id": f"review-{detail['case']}", "case": detail["case"],
                                     "country": detail["country"], "why": detail["why"], "status": "waiting",
                                     "queued_at": _now().isoformat(timespec="seconds")})
@@ -55,6 +84,7 @@ def review_overdue(detail: dict) -> None:
 
 def safety_signal(detail: dict) -> None:
     """Open a safety intake with a 24 hour report clock."""
+    hand_off("inquiry-agent", "pharmacovigilance", detail["case"], "Possible adverse event or special situation")
     received = _when(detail.get("received"))
     store.put("mi-pv-intake", {"id": f"pv-{detail['case']}", "case": detail["case"], "status": "open",
                                "received": received.isoformat(timespec="seconds"),
