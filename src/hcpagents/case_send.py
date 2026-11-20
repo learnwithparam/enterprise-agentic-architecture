@@ -50,7 +50,7 @@ def _record_touch(case: Case) -> None:
     store.put("mi-touches", {"id": f"touch-{doc['id']}", "hcp": doc["hcp"]["id"], "on": doc["sent_at"][:10],
                              "channel": doc["inquiry"]["channel"], "kind": "mi_reply", "product": doc["product"],
                              "promotional": False, "status": "done", "case": doc["id"],
-                             "summary": f"Medical information reply sent for case {doc['id']}."})
+                             "summary": "Medical information reply sent."})
 
 
 def send(case: Case, approved_by: str | None) -> bool:

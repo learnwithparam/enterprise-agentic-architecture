@@ -62,6 +62,15 @@ def test_a_finished_touch_that_came_from_a_case_shows_no_case_id_to_commercial()
     assert "inq-zone-9" not in json.dumps(views.commercial_view("hcp-kaya"))
 
 
+def test_commercial_touches_show_only_allowed_fields_and_no_case_id_in_the_summary():
+    store.put("mi-touches", {"id": "t-zone2", "hcp": "hcp-kaya", "status": "done", "on": "2026-11-02", "channel": "email",
+                             "kind": "mi_reply", "case": "inq-zone-8", "source": "inq-zone-8", "reasons": ["inq-zone-8"],
+                             "summary": "Medical information reply sent for case inq-zone-8."})
+    view = views.commercial_view("hcp-kaya")
+    assert "inq-zone-8" not in json.dumps(view)
+    assert all(set(touch) <= set(views.SHOWN) for touch in view["timeline"])
+
+
 def test_closing_the_case_lifts_the_hold_and_a_second_open_case_keeps_it():
     store.put("mi-cases", CASE)
     store.put("mi-cases", CASE | {"id": "inq-zone-2"})

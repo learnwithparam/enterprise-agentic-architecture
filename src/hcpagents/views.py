@@ -40,9 +40,16 @@ def _planned_on(touch: dict) -> str:
     return touch["on"]
 
 
-def _without_case(touch: dict) -> dict:
-    """Take out the case id. It belongs to the medical zone."""
-    return {key: value for key, value in touch.items() if key != "case"}
+SHOWN = ("id", "hcp", "on", "channel", "kind", "product", "promotional", "status", "content", "summary")
+CASE_SUMMARY = "Medical information reply sent."
+
+
+def _shown(touch: dict) -> dict:
+    """Keep only the fields marketing may see. A touch from a case gets a plain summary, with no case id."""
+    kept = {key: touch[key] for key in SHOWN if key in touch}
+    if touch.get("case"):
+        kept["summary"] = CASE_SUMMARY
+    return kept
 
 
 def commercial_summary() -> list[dict]:
@@ -69,9 +76,9 @@ def commercial_view(hcp_id: str) -> dict:
     mine = [touch for touch in touches if touch["hcp"] == hcp_id]
     done = [touch for touch in mine if touch["status"] == "done"]
     planned = sorted((touch for touch in mine if touch["status"] == "planned"), key=_planned_on)
-    timeline = [_without_case(touch) for touch in sorted(done, key=_planned_on, reverse=True)]
+    timeline = [_shown(touch) for touch in sorted(done, key=_planned_on, reverse=True)]
     return {"zone": "commercial", "hcp": hcp, "timeline": timeline,
-            "planned": [touch | {"decision": _decide(touch, hcp, content, holds, done)} for touch in planned]}
+            "planned": [_shown(touch) | {"decision": _decide(touch, hcp, content, holds, done)} for touch in planned]}
 
 
 def view_for(user: dict, hcp_id: str) -> dict:
