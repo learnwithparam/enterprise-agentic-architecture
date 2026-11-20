@@ -1,0 +1,7 @@
+# Keep the default rules. The replay recordings hold a "key" field that is the hash of the prompt, not a secret.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Replay recordings: the key field is a prompt hash"
+paths = ['''^recordings/''']
