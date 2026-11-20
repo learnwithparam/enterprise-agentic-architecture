@@ -104,9 +104,9 @@ function Stamp({ c }) {
 
 /** Approve re-asks for the password: that is the e-signature. Reject needs only a note. */
 function Decide({ c, reload }) {
-  const [note, setNote] = useState(c.status === 'blocked_at_send' ? 'Content withdrawn after drafting' : '');
+  const [note, setNote] = useState(c.status === 'awaiting_review' ? '' : 'Content withdrawn after drafting');
   const [signing, setSigning] = useState(false);
-  const blocked = c.status === 'blocked_at_send';
+  const blocked = c.status !== 'awaiting_review';
 
   async function approve(ev) {
     ev.preventDefault();
@@ -242,7 +242,7 @@ function CaseView({ id }) {
                 <p className="sub" id="replysub">{c.draft ? 'Every sentence is a whole sentence from an approved block. The margin shows which block, which version and its MLR approval.' : 'The AI wrote nothing for this case.'}</p>
                 <div className="paper" id="reply">
                   {c.draft ? <Stapled c={c} /> : <Stamp c={c} />}
-                  {c.draft && ['awaiting_review', 'blocked_at_send'].includes(c.status) && <Decide c={c} reload={state.reload} />}
+                  {c.draft && ['awaiting_review', 'blocked_at_send', 'invalidated_source_withdrawn'].includes(c.status) && <Decide c={c} reload={state.reload} />}
                 </div></div>
             </div>
           </Section>

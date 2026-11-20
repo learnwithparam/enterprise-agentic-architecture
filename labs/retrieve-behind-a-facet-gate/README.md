@@ -5,8 +5,9 @@ words of the question. It must never be the source of a reply.
 
 **Before:** retrieval ranks everything and filters after. A strong match on withdrawn or foreign content wins.
 
-**After:** product, country, approved status and validity dates are a hard filter in SQL. Ranking only orders
-what the gate lets through (ADR 0012).
+**After:** product, country, audience, approved status and validity dates are a hard filter in SQL. Ranking
+only orders what the gate lets through (ADR 0012). A rep never sees a doctor-only answer. The chatbot sees
+only its own script, word for word.
 
 ## Prerequisites
 
@@ -18,7 +19,7 @@ about 220 MB. No API key.
 ```mermaid
 flowchart LR
     Q[Question, product, country] --> G{Facet gate in SQL}
-    G -->|tenant, product, country, approved, in date| R[Rank: full text plus vectors]
+    G -->|tenant, product, country, audience, approved, in date| R[Rank: full text plus vectors]
     G -->|withdrawn, expired, other country| X[Never a candidate]
     R --> T[Top k blocks]
 ```
@@ -39,7 +40,7 @@ make up
 make lab N=retrieve-behind-a-facet-gate
 ```
 
-Expect: `3 passed`
+Expect: `4 passed`
 
 ## Read
 
@@ -52,11 +53,14 @@ Expect: `3 passed`
 - A withdrawn block is never returned, even when the question quotes it word for word.
 - Another country's blocks are never returned, whatever the question says.
 - Another tenant finds nothing.
+- A rep never gets a block marked for doctors only, such as kidney or pregnancy answers.
 
 ## Break it, watch the test fail
 
 In `src/hcpagents/retrieval.py`, delete the `AND d.doc ->> 'status' = 'approved'` line from `GATE`. The first
 test fails: the withdrawn storage block is back in the results. Put it back.
+
+Then delete the `audience` line from `GATE`. The fourth test fails: the kidney answer reaches the rep.
 
 ## What production adds
 

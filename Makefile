@@ -36,7 +36,8 @@ walkthrough: up  ## recapture docs/product-walkthrough-shots from a fresh replay
 lab:           ## make lab N=<lab-folder>: run one lab's tests
 	uv run pytest -q labs/$(N)
 
-check: up      ## the gate: tests, evals, mutants, prose, web build, mermaid, CSP
+check: up      ## the gate: web build, tests, evals, mutants, prose, mermaid, CSP
+	$(MAKE) web
 	uv run pytest -q
 	uv run python -m hcpagents.evals
 	uv run python -m hcpagents.retrieval_eval
@@ -44,7 +45,6 @@ check: up      ## the gate: tests, evals, mutants, prose, web build, mermaid, CS
 	uv run python scripts/check_prose.py
 	uv run python scripts/check_readable.py
 	uv run python scripts/check_docs_plain.py
-	$(MAKE) web
 	cd web && npx playwright-core install --only-shell --no-remove chromium > /dev/null
 	node web/scripts/check-mermaid.mjs
 	node web/scripts/check-csp.mjs

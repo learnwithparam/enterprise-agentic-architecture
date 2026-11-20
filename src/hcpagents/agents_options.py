@@ -37,7 +37,7 @@ def _hook(agent: str, case: dict, store: dict, authorize, audit, tool_calls: lis
         allowed, reason = pre_tool(agent, name, tool_input, case, store, authorize)
         returned = []
         if allowed:
-            kept, _ = post_tool(run_tool(store, name, tool_input), case, store)
+            kept, _ = post_tool(run_tool(store, name, tool_input, world.audience_of(case)), case, store)
             returned = [found["block_id"] for found in kept]
         tool_calls.append({"tool": name, "input": tool_input, "allowed": allowed, "reason": reason, "returned": returned})
         audit(audit_entry(agent, name, tool_input, allowed, reason, returned))

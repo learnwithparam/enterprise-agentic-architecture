@@ -39,20 +39,22 @@ The fourth pain decides whether AI is allowed in at all. If we cannot prove what
 
 The platform is a system of agents under one control plane. It is not one agent. It is not a pipeline with agents as steps. The [architecture walkthrough](./architecture-walkthrough.md) follows one doctor through it in four acts, with a diagram per step. This section is the summary.
 
-```text
- CRM   Marketing   Contact centre   Portal   Chatbot
-   \        |             |           |        /
-    +-------+---- signed webhooks and batch ---+
-            |
-   Identity resolution --> HCP 360 timeline (the agents' shared memory)
-            |                       |
-   Eight agents (Temporal workflows, LangGraph inside) <--- events (EventBridge, SQS)
-            |
-   Control plane: policy kernel, Cedar, autonomy ladder, model router, AI gateway,
-                  eval gate and releases, ledger
-            |
-   Data plane: Postgres (row-level security, pgvector), Valkey, S3 Object Lock, KMS per tenant
+The [system blueprint](./blueprint.md) draws all of it: the data flow of the four channels, the data firewall with its view matrix, the approval path, the AWS layout and every place a human decides. Here is the flow in one picture.
+
+```mermaid
+flowchart LR
+    CH[Four channels and the chatbot] --> ID[Identity: one doctor]
+    ID --> RULES[Safety rule floor]
+    RULES -->|signal| PV[Safety intake, own workflow]
+    RULES --> CASE[Case workflow with eight agents]
+    CASE --> GATE[Every sentence matched to an approved block]
+    GATE -->|safe| SEND[Send after a last check]
+    GATE -->|needs a person| REVIEW[Signed human approval]
+    REVIEW --> SEND
+    SEND --> LEDGER[(Hash chained ledger)]
 ```
+
+The control plane around it is the policy kernel, Cedar, the autonomy ladder, the model router, the AI gateway, the eval gate and the ledger. The data plane is Postgres with row-level security and pgvector, Valkey, S3 Object Lock and one KMS key for each tenant and each zone.
 
 **Four planes.** The agent plane holds eight long-lived agents. The control plane holds everything no agent may override. The data plane holds state, search, events and the archive. The interface plane is the console, the `/v1` API, an MCP server, the `hcp` CLI and the channel webhooks.
 

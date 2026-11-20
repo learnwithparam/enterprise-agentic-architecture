@@ -14,7 +14,7 @@ import re
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from hcpagents import privacy, store, world
+from hcpagents import pii_detector, privacy, store, world
 
 TABLE = "mi-phi"
 NONCE_BYTES = 12
@@ -22,7 +22,7 @@ TITLED_NAME = re.compile(r"\b(?:Dr|Prof|Mr|Mrs|Ms)\.? [A-Z][a-z]+(?: [A-Z][a-z]+
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 IDENTIFIER = re.compile(r"\b(?:[A-Z]{2,}-)+\d{4,}\b|\b(?:MRN|mk)[- ]?\d{4,}\b")
 PHONE = re.compile(r"\+?\d[\d\s().-]{6,}\d")
-TOKEN = re.compile(r"\[(?:NAME|EMAIL|ID|PHONE)_\d+\]")
+TOKEN = re.compile(r"\[(?:NAME|EMAIL|ID|PHONE|DOB|ADDRESS)_\d+\]")
 TITLES = {"dr", "dr.", "prof", "mr", "mrs", "ms"}
 
 
@@ -62,7 +62,17 @@ def swap_out(text: str, vault: dict) -> str:
     text = _swap_pattern(text, vault, "PHONE", PHONE)
     for name in _known_names():
         text = _swap_pattern(text, vault, "NAME", re.compile(rf"\b{re.escape(name)}\b"))
-    return _swap_pattern(text, vault, "NAME", TITLED_NAME)
+    text = _swap_pattern(text, vault, "NAME", TITLED_NAME)
+    return _swap_found(text, vault)
+
+
+def _swap_found(text: str, vault: dict) -> str:
+    """Swap what the detector finds in free text. It runs last, and values that are already tokens are left alone."""
+    for start, end, kind in reversed(pii_detector.find(text)):
+        value = text[start:end]
+        if not TOKEN.fullmatch(value):
+            text = text[:start] + _token_for(vault, kind, value) + text[end:]
+    return text
 
 
 def swap_back(text: str, vault: dict) -> str:

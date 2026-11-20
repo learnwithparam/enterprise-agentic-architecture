@@ -58,3 +58,22 @@ product = "OMB"
 country = "JP"
 answer = ""
 forbidden = ["OMB-JP-INTER", "OMB-US-INTER"]
+
+# Audience cases. A rep never gets doctor-only answers. The chatbot gets only its own script.
+[[case]]
+id = "r-rep-renal"
+query = "Is a lower dose needed for patients with kidney disease?"
+product = "VEL"
+country = "US"
+audience = "rep"
+answer = ""
+forbidden = ["VEL-US-RENAL"]
+
+[[case]]
+id = "r-chatbot-find"
+query = "Where can I find the prescribing information for Veltrona?"
+product = "VEL"
+country = "US"
+audience = "chatbot"
+answer = "SS-VEL-US-FIND"
+forbidden = ["VEL-US-DOSE", "VEL-US-RENAL", "ISI-VEL-US"]

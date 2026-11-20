@@ -3,7 +3,7 @@
 import hashlib
 from datetime import UTC, datetime
 
-from hcpagents import delivery, events, grounding, store, world
+from hcpagents import approval, delivery, events, grounding, store, world
 from hcpagents.case_core import Case
 
 STATUS = {
@@ -30,6 +30,7 @@ def handoff(case: Case) -> None:
     if doc["route"] == "send":
         send(case, approved_by=None)
     elif doc["route"] == "review":
+        note_draft_sources(doc)
         events.publish("ReviewNeeded", {"case": doc["id"], "country": doc["country"], "why": doc["decision"]["why"]})
     elif doc["route"] == "pv":
         events.publish("SafetySignal", {"case": doc["id"], "country": doc["country"], "product": doc["product"],
@@ -37,23 +38,34 @@ def handoff(case: Case) -> None:
                                         "received": doc["inquiry"]["received"]})
 
 
+def note_draft_sources(doc: dict) -> None:
+    """Write which blocks a draft uses. A withdrawal then finds the drafts it touches without reading every case."""
+    for segment in (doc.get("draft") or {}).get("segments", []):
+        store.put("mi-draft-sources", {"id": f"{segment['block_id']}:{doc['id']}", "block": segment["block_id"],
+                                       "version": segment["version"], "case": doc["id"]})
+
+
 def _record_touch(case: Case) -> None:
     doc = case.doc
     store.put("mi-touches", {"id": f"touch-{doc['id']}", "hcp": doc["hcp"]["id"], "on": doc["sent_at"][:10],
                              "channel": doc["inquiry"]["channel"], "kind": "mi_reply", "product": doc["product"],
                              "promotional": False, "status": "done", "case": doc["id"],
-                             "summary": f"Medical information reply sent for case {doc['id']}."})
+                             "summary": "Medical information reply sent."})
 
 
 def send(case: Case, approved_by: str | None) -> bool:
     """Check the draft again against the content store as it is now, then send. If the check fails, nothing goes out."""
     doc = case.doc
     check = grounding.verify(doc["draft"]["segments"], doc["product"], doc["country"], store.content())
+    unsigned = []
+    if approved_by:
+        unsigned = approval.problems(doc)
     doc["send_check"] = check
-    if not check["grounded"]:
+    if unsigned or not check["grounded"]:
+        problems = unsigned + check["problems"]
         doc["status"] = "blocked_at_send"
-        doc["history"].append({"at": now(), "event": "Send blocked", "detail": check["problems"]})
-        case.audit({"type": "send_blocked", "problems": check["problems"]})
+        doc["history"].append({"at": now(), "event": "Send blocked", "detail": problems})
+        case.audit({"type": "send_blocked", "problems": problems})
         return False
     message_id = None
     if doc["hcp"]:
@@ -69,7 +81,8 @@ def send(case: Case, approved_by: str | None) -> bool:
     doc["history"].append({"at": doc["sent_at"], "event": event})
     case.audit({"type": "reply_sent", "approved_by": approved_by, "delivery_id": message_id,
                 "blocks": [(segment["block_id"], segment["version"]) for segment in doc["draft"]["segments"]],
-                "reply_sha256": sha(doc["draft"]["text"])})
+                "reply_sha256": sha(doc["draft"]["text"]),
+                "approval_digest": (doc.get("approval") or {}).get("digest")})
     if doc["hcp"]:
         _record_touch(case)
     return True

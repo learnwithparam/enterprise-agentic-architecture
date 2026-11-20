@@ -158,3 +158,12 @@ def why_not_current(block: dict, today: date = TODAY) -> str | None:
     if today < date.fromisoformat(block["approved_on"]):
         return f"{block['id']} v{block['version']} is not effective until {block['approved_on']}"
     return None
+
+
+AUDIENCE_OF_CHANNEL = {"crm": "rep", "marketing": "rep", "chatbot": "chatbot"}
+
+
+def audience_of(case: dict) -> str:
+    """Who is asking. A rep note or a marketing request is a rep. The chatbot is the chatbot. Anyone else is a doctor."""
+    channel = case.get("channel") or (case.get("inquiry") or {}).get("channel")
+    return AUDIENCE_OF_CHANNEL.get(channel, "doctor")

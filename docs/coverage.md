@@ -41,7 +41,7 @@ A dash means the requirement has no screen or no lab of its own. Every row has a
 | The clickable slice and every screen | product-walkthrough.md | / | - | tests/test_walkthrough.py::test_doc_and_capture_list_the_same_screens_in_order |
 | The moments the system refuses to answer or act | case-study.md | /review | - | tests/test_flow.py::test_nobody_approves_on_a_pharmacovigilance_case |
 | A field rep sees status but not detail | case-study.md | /review | guard-tool-calls-with-cedar | tests/test_flow.py::test_field_rep_sees_status_but_not_case_detail |
-| Content withdrawn mid-review blocks the send | product-walkthrough.md | /content | - | tests/test_flow.py::test_withdrawn_content_invalidates_the_draft_and_blocks_the_send |
+| Content withdrawn mid-review blocks the send | product-walkthrough.md | /content | - | tests/test_flow.py::test_content_pulled_outside_withdraw_still_blocks_the_send |
 | Edge cases and open questions | case-study.md | - | - | tests/test_rules.py::test_scope_is_per_country |
 | A grounded reply is emailed and the ledger names the message | architecture-walkthrough.md | - | - | tests/test_delivery.py::test_the_outbox_holds_the_exact_grounded_reply_and_the_ledger_names_the_message |
 | A withdrawn block sends no email | architecture-walkthrough.md | /content | - | tests/test_delivery.py::test_a_block_withdrawn_before_the_send_sends_nothing |
@@ -182,3 +182,25 @@ The shell tool is excluded on purpose: a medical agent must never get a shell, a
 | Live lab fact-checker: An invented sentence is flagged | architecture-walkthrough.md | - | ground-replies-with-approved-blocks | tests/test_factcheck.py::test_an_invented_sentence_is_flagged |
 | Live lab revocation: A revoked user is refused on the next call on every machine route | adr/0010-signed-tokens-and-server-side-tenant.md | - | - | tests/test_live_i_revocation.py::test_a_revoked_user_is_refused_on_the_next_call_on_every_machine_route |
 | Live lab end-to-end: The whole flow runs and an auto send records a touch on the doctor's timeline | architecture-walkthrough.md | - | - | tests/test_flow.py::test_auto_send_records_a_touch_on_the_hcp_timeline |
+
+## Blueprint gaps
+
+| Requirement | Doc | Screen | Lab | Test |
+|---|---|---|---|---|
+| A failed safety model never drops a rule hit | architecture-walkthrough.md | - | keep-safety-intake-moving-with-a-manual-queue | tests/test_safety_floor.py::test_a_failing_safety_model_still_keeps_the_rule_hit |
+| A silent detector hands every note to a person | architecture-walkthrough.md | - | keep-safety-intake-moving-with-a-manual-queue | tests/test_safety_clock.py::test_a_down_detector_sends_every_note_to_manual_screening_and_drops_none |
+| A safety intake is acknowledged within one business day | architecture-walkthrough.md | - | keep-safety-intake-moving-with-a-manual-queue | tests/test_safety_clock.py::test_the_acknowledgment_is_due_one_business_day_later |
+| Commercial data cannot reach medical or safety zones | architecture-walkthrough.md | /hcp | split-data-into-zones | tests/test_zones.py::test_the_commercial_role_cannot_read_or_write_the_medical_and_safety_zones |
+| A hold crosses zones with no case id | architecture-walkthrough.md | /hcp | split-data-into-zones | tests/test_zones.py::test_an_open_case_holds_promotion_and_the_commercial_view_never_names_it |
+| Only medical roles get the medical view | architecture-walkthrough.md | /hcp | split-data-into-zones | tests/test_zones.py::test_cedar_gives_reviewers_the_medical_view_and_reps_the_commercial_one |
+| Agent modules reach no database | architecture-walkthrough.md | - | - | tests/test_zones.py::test_agent_modules_import_no_database_layer |
+| A rep never gets an answer meant for doctors | adr/0012-hybrid-retrieval-behind-a-hard-facet-gate.md | - | retrieve-behind-a-facet-gate | tests/test_content_firewall.py::test_a_rep_never_gets_a_doctor_only_answer |
+| The chatbot gets only its own script, word for word | adr/0012-hybrid-retrieval-behind-a-hard-facet-gate.md | - | retrieve-behind-a-facet-gate | tests/test_content_firewall.py::test_the_chatbot_gets_only_its_own_script_word_for_word |
+| Every block names its type and who may see it | adr/0012-hybrid-retrieval-behind-a-hard-facet-gate.md | /content | - | tests/test_content_firewall.py::test_every_block_names_a_type_and_who_may_see_it |
+| A signature covers one exact reply | adr/0017-a-reviewer-wait-is-a-workflow-with-a-deadline-and-a-signature.md | /review | bind-the-signature-to-the-reply | tests/test_approval_binding.py::test_an_approval_keeps_the_digest_the_release_and_the_draft_version |
+| A reply changed after signing is never sent | adr/0017-a-reviewer-wait-is-a-workflow-with-a-deadline-and-a-signature.md | /review | bind-the-signature-to-the-reply | tests/test_approval_binding.py::test_a_reply_changed_after_signing_is_never_sent_and_the_ledger_says_so |
+| A withdrawal closes the draft before anyone signs it | adr/0017-a-reviewer-wait-is-a-workflow-with-a-deadline-and-a-signature.md | /review | bind-the-signature-to-the-reply | tests/test_approval_binding.py::test_a_withdrawal_closes_the_draft_before_a_reviewer_can_sign_it |
+| A blocked send and a rejection both reach the ledger | adr/0017-a-reviewer-wait-is-a-workflow-with-a-deadline-and-a-signature.md | /review | - | tests/test_approval_binding.py::test_a_rejection_is_on_the_ledger |
+| Nothing about a doctor reaches the model client | adr/0015-sealed-ledger-data-and-erasure-by-key-deletion.md | - | tokenise-phi-with-a-vault | tests/test_wire_privacy.py::test_no_doctor_name_email_phone_or_id_reaches_the_model_client |
+| Free text is screened for patient names, birth dates and addresses | adr/0015-sealed-ledger-data-and-erasure-by-key-deletion.md | - | tokenise-phi-with-a-vault | labs/tokenise-phi-with-a-vault/test_phi_vault.py::test_step_5_a_patient_name_a_birth_date_and_an_address_are_tokens_too |
+| The blueprint tables cannot drift from the code | blueprint.md | - | - | tests/test_blueprint.py::test_the_view_matrix_matches_cedar_and_covers_every_role |

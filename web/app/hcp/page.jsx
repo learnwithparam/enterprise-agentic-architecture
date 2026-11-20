@@ -15,7 +15,6 @@ function People({ selected }) {
         <b>{h.name}</b><small>{h.specialty}, {h.country}</small>
         <span className="row">
           <Chip className="num">{h.touches} touch{h.touches === 1 ? '' : 'es'}</Chip>
-          {h.open_cases > 0 && <Chip tone="wait">{h.open_cases} open case{h.open_cases > 1 ? 's' : ''}</Chip>}
           {h.held > 0 && <Chip tone="red">{h.held} held</Chip>}
         </span>
       </Link>))}</Await></div>
@@ -65,8 +64,10 @@ function Detail({ id }) {
                   <p>{p.summary}</p>
                   {p.decision.reasons.length > 0 && <ul>{p.decision.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
                 </div>)) : <p className="empty">Nothing planned.</p>}
-              <h2 className="sec gap">Open medical cases</h2>
-              {v.open_cases.length ? v.open_cases.map((c) => <p key={c.id}><CaseLink id={c.id} /> <span className="muted">{c.product}, {words(c.status)}</span></p>) : <p className="empty">None.</p>}
+              {v.open_cases && <>
+                <h2 className="sec gap">Open medical cases</h2>
+                {v.open_cases.length ? v.open_cases.map((c) => <p key={c.id}><CaseLink id={c.id} /> <span className="muted">{c.product}, {words(c.status)}</span></p>) : <p className="empty">None.</p>}
+              </>}
               <Plan id={id} planned={v.planned} />
             </div>
             <div>

@@ -199,6 +199,21 @@
       }
      }
     }
+   },
+   "Hcp": {
+    "shape": {
+     "type": "Record",
+     "attributes": {
+      "country": {
+       "type": "String",
+       "required": true
+      },
+      "tenant": {
+       "type": "String",
+       "required": true
+      }
+     }
+    }
    }
   },
   "actions": {
@@ -392,6 +407,16 @@
      ],
      "resourceTypes": [
       "Proposal"
+     ]
+    }
+   },
+   "ViewMedicalZone": {
+    "appliesTo": {
+     "principalTypes": [
+      "User"
+     ],
+     "resourceTypes": [
+      "Hcp"
      ]
     }
    }

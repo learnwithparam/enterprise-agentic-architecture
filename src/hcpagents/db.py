@@ -22,6 +22,7 @@ from hcpagents import world
 from hcpagents.aws import client
 
 APP_SECRET = "mi/db/hcp_app"  # a Secrets Manager name; the stack makes the same one
+ZONE_ROLES = ("hcp_medical", "hcp_commercial", "hcp_safety")  # one login per data zone, each in its own secret
 
 
 def app_url(parts: dict) -> str:
@@ -30,22 +31,28 @@ def app_url(parts: dict) -> str:
     return f"postgresql://{username}:{password}@{parts['host']}:{parts['port']}/{parts['dbname']}"
 
 
-def app_secret(create: bool = False) -> dict:
-    """Read the app role's secret. With create=True a missing one gets a random password. Only the local emulator does this."""
+def app_secret(create: bool = False, role: str = "hcp_app") -> dict:
+    """Read a role's secret. With create=True a missing one gets a random password. Only the local emulator does this."""
     manager = client("secretsmanager")
+    name = f"mi/db/{role}"
     try:
-        return json.loads(manager.get_secret_value(SecretId=APP_SECRET)["SecretString"])
+        return json.loads(manager.get_secret_value(SecretId=name)["SecretString"])
     except ClientError as error:
         if not create or error.response["Error"]["Code"] != "ResourceNotFoundException":
             raise
-    parts = {"username": "hcp_app", "password": secrets.token_urlsafe(24), "host": "localhost", "port": 5433, "dbname": "hcp"}
-    manager.create_secret(Name=APP_SECRET, SecretString=json.dumps(parts))
+    parts = {"username": role, "password": secrets.token_urlsafe(24), "host": "localhost", "port": 5433, "dbname": "hcp"}
+    manager.create_secret(Name=name, SecretString=json.dumps(parts))
     return parts
 
 
 @cache
 def _app_url() -> str:
     return app_url(app_secret())
+
+
+@cache
+def _zone_url(role: str) -> str:
+    return app_url(app_secret(role=role))
 
 
 def __getattr__(name):  # APP_URL is read from Secrets Manager on first use
@@ -81,6 +88,16 @@ def session():
         yield conn
 
 
+@contextmanager
+def zone_session(role: str):
+    """One transaction as a zone role, for the current tenant. That role can reach its own zone and nothing else."""
+    if role not in ZONE_ROLES:
+        raise ValueError(f"{role} is not a zone role")
+    with psycopg.connect(_zone_url(role), row_factory=dict_row) as conn, conn.transaction():
+        conn.execute("SELECT set_config('app.tenant_id', %s, true)", (current_tenant(),))
+        yield conn
+
+
 def is_up() -> bool:
     try:
         with psycopg.connect(_app_url(), connect_timeout=2):
@@ -104,6 +121,10 @@ def migrate() -> list[str]:
             ran.append(path.name)
         conn.execute(sql.SQL("ALTER ROLE hcp_app PASSWORD {}").format(sql.Literal(app_secret(create=True)["password"])))
         _app_url.cache_clear()
+        for role in ZONE_ROLES:
+            conn.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(
+                sql.Identifier(role), sql.Literal(app_secret(create=True, role=role)["password"])))
+        _zone_url.cache_clear()
         for tenant in world.tenants():
             # The owner goes through RLS too, so it names the tenant it writes.
             with conn.transaction():
@@ -118,6 +139,8 @@ def wipe() -> None:
     for tenant in world.tenants():
         with as_tenant(tenant["id"]), session() as conn:
             conn.execute("DELETE FROM docs")
+            for zone in ("medical", "safety", "commercial"):
+                conn.execute(sql.SQL("DELETE FROM {}.docs").format(sql.Identifier(zone)))
             conn.execute("DELETE FROM content_index")
 
 

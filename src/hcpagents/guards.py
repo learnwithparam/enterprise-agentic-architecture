@@ -34,6 +34,8 @@ def pre_tool(agent: str, tool: str, tool_input: dict, case: dict, store: dict, a
 
 
 def _fits_case(block: dict, case: dict) -> bool:
+    if world.audience_of(case) not in block.get("audience", []):
+        return False
     if block["country"] == "ALL" and block["product"] == "ALL":
         return True
     return block["country"] == case["country"] and block["product"] == case["product"]
