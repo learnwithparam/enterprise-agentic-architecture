@@ -29,3 +29,9 @@ def test_another_country_is_never_returned_whatever_the_question_says():
 def test_another_tenant_finds_nothing():
     with db.as_tenant("marlowe"):
         assert ids("recommended dose", "VEL", "US", k=10) == []
+
+
+def test_a_rep_never_gets_an_answer_meant_for_doctors():
+    for_doctor = ids("kidney disease dose", "VEL", "US", k=20)
+    for_rep = ids("kidney disease dose", "VEL", "US", k=20, audience="rep")
+    assert "VEL-US-RENAL" in for_doctor and "VEL-US-RENAL" not in for_rep

@@ -36,6 +36,7 @@ from constructs import Construct
 from hcpagents import identity_spec
 
 ROOT = Path(__file__).resolve().parent.parent
+ZONES = {"medical": "hcp_medical", "commercial": "hcp_commercial", "safety": "hcp_safety"}  # data zone -> its database role
 APP_SECRET = "mi/db/hcp_app"  # the same name hcpagents.db reads
 TENANTS = ("quillon", "marlowe")
 MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5")  # the two allowed models (ADR 0007)
@@ -70,6 +71,7 @@ class Platform(cdk.Stack):
         self.vpc = self.network()
         self.app_sg = ec2.SecurityGroup(self, "AppSg", vpc=self.vpc, description="Tasks that run the platform")
         self.keys = {t: kms.Key(self, f"Key-{t}", enable_key_rotation=True, alias=f"alias/hcp-{t}") for t in TENANTS}
+        self.zone_keys = {z: kms.Key(self, f"ZoneKey-{z}", enable_key_rotation=True, alias=f"alias/hcp-zone-{z}") for z in ZONES}
         self.logs_bucket = self.access_logs()
         self.ledgers = {t: self.ledger(t) for t in TENANTS}
         self.database = self.postgres()
@@ -218,6 +220,15 @@ class Platform(cdk.Stack):
                 generate_string_key="password", exclude_punctuation=True, password_length=32))
         suppress(self.app_secret, "AwsSolutions-SMG4", "The password is rotated by deploying a new generated value; the migration task applies it to the role on every deploy.")
         self.app_secret.grant_read(role)
+        for zone, db_role in ZONES.items():
+            zone_secret = secrets.Secret(
+                self, f"ZoneRoleSecret-{zone}", secret_name=f"mi/db/{db_role}", encryption_key=self.zone_keys[zone],
+                description=f"The {db_role} login for the {zone} data zone; only that zone's key opens it",
+                generate_secret_string=secrets.SecretStringGenerator(
+                    secret_string_template=json.dumps({"username": db_role, "host": self.database.cluster_endpoint.hostname, "port": 5432, "dbname": "hcp"}),
+                    generate_string_key="password", exclude_punctuation=True, password_length=32))
+            suppress(zone_secret, "AwsSolutions-SMG4", "The password is rotated by deploying a new generated value; the migration task applies it to the role on every deploy.")
+            zone_secret.grant_read(role)
         env = {"MI_VALKEY": f"valkeys://{self.cache.attr_endpoint_address}:6379/0", "MI_TEMPORAL": self.node.try_get_context("temporal") or "temporal.internal:7233"}
         keys = {"ANTHROPIC_API_KEY": ecs.Secret.from_secrets_manager(anthropic)}
         image = ecs.ContainerImage.from_asset(str(ROOT))

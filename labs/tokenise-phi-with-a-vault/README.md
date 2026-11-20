@@ -43,7 +43,7 @@ These are the `# Step` comments in `tokenise`.
 make lab N=tokenise-phi-with-a-vault
 ```
 
-Expect: 4 passed
+Expect: 5 passed
 
 ## Read
 
@@ -56,6 +56,7 @@ Expect: 4 passed
 - The same value always gets the same token inside one case.
 - Swapping back gives the original text, character for character.
 - A vault knows only its own tokens.
+- A patient name, a birth date and a street address in free text are tokens too, and the medical words stay.
 
 ## Break it, watch the test fail
 

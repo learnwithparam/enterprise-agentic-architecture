@@ -4,7 +4,7 @@ import { useApi } from '@/lib/hooks';
 import { Await, CaseLink, PageHead, RouteChip, Section } from '@/components/ui';
 
 const GROUPS = [
-  ['Drafts awaiting a medical reviewer', 'A human in the loop approves or rejects. Approval re-checks every sentence against content as it is now.', ['awaiting_review', 'blocked_at_send']],
+  ['Drafts awaiting a medical reviewer', 'A human in the loop approves or rejects. Approval re-checks every sentence against content as it is now.', ['awaiting_review', 'blocked_at_send', 'invalidated_source_withdrawn']],
   ['With pharmacovigilance', 'Possible adverse events and special situations. No AI text exists for these.', ['with_pharmacovigilance']],
   ['With Medical and specialists', 'Off-label questions, unverified senders and unknown products. Written by hand.', ['with_medical', 'with_specialist']],
   ['Closed', 'Sent, declined or rejected.', ['sent', 'declined', 'rejected']],

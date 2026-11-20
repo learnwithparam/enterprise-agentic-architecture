@@ -1,11 +1,12 @@
 """Hybrid search over approved content (ADR 0012).
 
 Two layers, in this order:
-1. The facet gate is a hard filter in SQL. It checks tenant, product, country, approval and the approval dates.
+1. The facet gate is a hard filter in SQL. It checks tenant, product, country, audience, approval and the approval dates.
    Nothing outside it can come back.
 2. Inside the gate, text rank and vector rank are joined with rank fusion.
 
-A search on meaning alone could return a US dose for a German question. So the gate comes first.
+A search on meaning alone could return a US dose for a German question, or a doctor-only answer to a rep.
+So the gate comes first. The audience says who is asking: a doctor, a rep or the chatbot.
 """
 
 import re
@@ -17,6 +18,7 @@ RRF_K = 60  # the fusion constant; a bigger number makes top ranks count less
 GATE = """
     d.kind = 'content'
     AND d.doc ->> 'product' = %(product)s AND d.doc ->> 'country' = %(country)s
+    AND d.doc -> 'audience' @> to_jsonb(%(audience)s::text)
     AND d.doc ->> 'status' = 'approved'
     AND (d.doc ->> 'approved_on')::date <= %(today)s AND %(today)s <= (d.doc ->> 'expires_on')::date
 """
@@ -40,21 +42,22 @@ def index() -> int:
 
 
 def search(query: str, product: str, country: str, topic: str | None = None, limit: int = 5,
-           mode: str = "hybrid", **aliases) -> list[dict]:
+           mode: str = "hybrid", audience: str = "doctor", **aliases) -> list[dict]:
     """The best current blocks for a question. A cache answers if the same question came up lately (ADR 0018).
 
     The topic narrows the search inside the gate when the caller knows it. The old name k still works for limit.
     The mode "fts" or "vector" ranks with one signal only. The eval compares them with "hybrid".
+    The audience is doctor, rep or chatbot. A block is found only if its own audience list holds it.
     """
     if "k" in aliases:
         limit = aliases["k"]
     tenant = world.current_tenant()
     cache_key = cache.key(tenant, query=query, product=product, country=country, topic=topic, k=limit, mode=mode,
-                          today=world.TODAY, model=embeddings.embedder().model_id)
+                          audience=audience, today=world.TODAY, model=embeddings.embedder().model_id)
     hit = cache.get(cache_key)
     if hit is not None:
         return hit
-    results = _rank(query, product, country, topic, limit, mode)
+    results = _rank(query, product, country, topic, limit, mode, audience)
     cache.put(tenant, cache_key, results)
     return results
 
@@ -83,10 +86,12 @@ def _best_first(score: dict[str, float]) -> list[str]:
     return sorted(score, key=order)
 
 
-def _rank(query: str, product: str, country: str, topic: str | None, limit: int, mode: str) -> list[dict]:
+def _rank(query: str, product: str, country: str, topic: str | None, limit: int, mode: str,
+          audience: str) -> list[dict]:
     # Step 1: Turn the question into words and a vector.
     embedder = embeddings.embedder()
     params = {"product": product, "country": country, "today": world.TODAY, "topic": topic,
+              "audience": audience,
               "words": " | ".join(re.findall(r"\w+", query.lower())) or "''",
               "vec": embeddings.literal(embedder.embed([query])[0]), "model": embedder.model_id,
               "pool": max(limit * 4, 20)}

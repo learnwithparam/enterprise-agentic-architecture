@@ -9,7 +9,7 @@ from aws_cdk.assertions import Template
 from cdk_nag import AwsSolutionsChecks
 
 import migrate_handler
-from stack import REPLICA_REGION, TENANTS, Platform, SecondRegion, replica_bucket
+from stack import REPLICA_REGION, TENANTS, ZONES, Platform, SecondRegion, replica_bucket
 
 ALLOWED = ("claude-haiku-5-5", "claude-sonnet-5-5")
 
@@ -37,6 +37,17 @@ def test_cdk_nag_finds_nothing_to_fix(stack):
     assert stack.node.try_find_child("Postgres") is not None
 
 
+def test_each_data_zone_has_its_own_key_and_its_own_login_secret(stack):
+    """The medical, commercial and safety zones each get a rotating KMS key and a database login sealed with that key."""
+    template = Template.from_stack(stack)
+    for zone, role in ZONES.items():
+        keys = template.find_resources("AWS::KMS::Alias", {"Properties": {"AliasName": f"alias/hcp-zone-{zone}"}})
+        assert len(keys) == 1, zone
+        secrets = template.find_resources("AWS::SecretsManager::Secret", {"Properties": {"Name": f"mi/db/{role}"}})
+        assert len(secrets) == 1 and "KmsKeyId" in next(iter(secrets.values()))["Properties"], role
+    template.has_resource_properties("AWS::KMS::Key", {"EnableKeyRotation": True})
+
+
 def test_cdk_nag_refuses_a_stack_with_a_finding():
     app = cdk.App()
     bad = cdk.Stack(app, "Bad")
@@ -48,7 +59,7 @@ def test_cdk_nag_refuses_a_stack_with_a_finding():
 
 def test_each_tenant_has_its_own_locked_encrypted_ledger_and_key(stack):
     t = Template.from_stack(stack)
-    t.resource_count_is("AWS::KMS::Key", len(TENANTS))
+    t.resource_count_is("AWS::KMS::Key", len(TENANTS) + len(ZONES))  # one per tenant ledger, one per data zone
     ledgers = [r for r in t.find_resources("AWS::S3::Bucket").values() if r["Properties"].get("ObjectLockEnabled")]
     assert len(ledgers) == len(TENANTS)
     for r in ledgers:

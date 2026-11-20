@@ -4,7 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from hcpagents import cases, hcp360, insight, outreach, releases, store, world
+from hcpagents import cases, insight, outreach, releases, store, views, world
 from hcpagents.api_user import Decision, current_user, denied
 
 router = APIRouter()
@@ -34,14 +34,14 @@ def withdraw(block_id: str, body: Decision, user: dict = Depends(current_user)):
 
 @router.get("/api/hcps")
 def hcps():
-    return hcp360.summary()
+    return views.commercial_summary()
 
 
 @router.get("/api/hcps/{hcp_id}")
-def hcp(hcp_id: str):
+def hcp(hcp_id: str, user: dict = Depends(current_user)):
     if store.get("mi-hcp", hcp_id) is None:
         raise HTTPException(404, "No such HCP")
-    return hcp360.view(hcp_id)
+    return views.view_for(user, hcp_id)
 
 
 @router.get("/api/insights")

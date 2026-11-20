@@ -3,12 +3,13 @@
 import contextlib
 from datetime import UTC, datetime
 
-from hcpagents import authz, cache, events, grounding, ledger, memory, store, world
+from hcpagents import approval, authz, cache, events, grounding, ledger, memory, store, world
 from hcpagents.case_core import Case, autonomy_setting, restore, save_autonomy
 from hcpagents.case_send import now, send
 
 SIGNATURE_MAX_AGE_S = 300  # A signature older than this was not made for this approval.
 OPEN_STATUSES = ("awaiting_review", "blocked_at_send")
+WITHDRAWN = "invalidated_source_withdrawn"
 
 
 class Denied(Exception):
@@ -53,7 +54,9 @@ def approve(case_id: str, user: dict, signature: dict | None) -> dict:
         raise Denied(f"Case {case_id} is {case.doc['status']}, not awaiting review")
     if not case.doc.get("draft"):
         raise Denied("There is no AI draft to approve. Approved content does not cover this case; medical writes the reply.")
-    case.audit({"type": "approved", "user": user["id"]})
+    case.doc["approval"] = approval.bind(case.doc, signature)
+    case.audit({"type": "approved", "user": user["id"], "approval_digest": case.doc["approval"]["digest"],
+                "release": case.doc["approval"]["release"], "draft_version": case.doc["approval"]["draft_version"]})
     send(case, approved_by=user["name"])
     store.put("mi-cases", case.doc)
     return case.doc
@@ -103,7 +106,8 @@ def withdraw(block_id: str, user: dict, reason: str) -> dict:
         evicted = None
         ledger.append({"type": "cache_evict_failed", "block": block_id, "error": str(error)})
     events.publish("ContentWithdrawn", {"tenant": tenant, "block": block_id, "version": block["version"]})
-    return {"block": block_id, "queued": True, "cache_evicted": evicted}
+    invalidated = _invalidate_drafts_of(block_id)
+    return {"block": block_id, "queued": True, "cache_evicted": evicted, "invalidated": invalidated}
 
 
 def process_invalidations() -> dict:
@@ -120,7 +124,31 @@ def process_invalidations() -> dict:
     return {"cases": affected}
 
 
+def _invalidate_case(doc: dict, block_id: str) -> None:
+    """Take a draft out of the approvable states. The reviewer sees why, and the queue stops asking them to look at it."""
+    doc["verification"] = grounding.verify(doc["draft"]["segments"], doc["product"], doc["country"], store.content())
+    doc["status"] = WITHDRAWN
+    doc["history"].append({"at": now(), "event": f"Draft invalidated: {block_id} was withdrawn"})
+    store.put("mi-cases", doc)
+    waiting = store.get("mi-reviewer-queue", f"review-{doc['id']}")
+    if waiting:
+        store.put("mi-reviewer-queue", waiting | {"status": "source_withdrawn"})
+    ledger.append({"case": doc["id"], "type": "draft_invalidated", "block": block_id})
+
+
+def _invalidate_drafts_of(block_id: str) -> list[str]:
+    """Right after a withdrawal, close the drafts that use the block. The draft sources index finds them."""
+    affected = []
+    for source in store.scan_prefix("mi-draft-sources", f"{block_id}:"):
+        doc = store.get("mi-cases", source["case"])
+        if doc and doc.get("status") == "awaiting_review" and doc.get("draft"):
+            _invalidate_case(doc, block_id)
+            affected.append(doc["id"])
+    return affected
+
+
 def _invalidate(event: dict) -> list[str]:
+    """The steward is the backstop. It reads every case, so it also catches drafts that have no sources note and events from outside."""
     with contextlib.suppress(cache.CacheDown):
         cache.evict_block(event["tenant"], event["block"])
     affected = []
@@ -128,10 +156,7 @@ def _invalidate(event: dict) -> list[str]:
         if doc.get("status") != "awaiting_review" or not doc.get("draft"):
             continue
         if event["block"] in {segment["block_id"] for segment in doc["draft"]["segments"]}:
-            doc["verification"] = grounding.verify(doc["draft"]["segments"], doc["product"], doc["country"], store.content())
-            doc["history"].append({"at": now(), "event": f"Draft invalidated: {event['block']} was withdrawn"})
-            store.put("mi-cases", doc)
-            ledger.append({"case": doc["id"], "type": "draft_invalidated", "block": event["block"]})
+            _invalidate_case(doc, event["block"])
             affected.append(doc["id"])
     return affected
 

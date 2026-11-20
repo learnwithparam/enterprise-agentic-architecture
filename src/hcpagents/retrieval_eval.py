@@ -31,7 +31,8 @@ def _topic_filter(case: dict) -> list[str]:
 def rank(case: dict, mode: str) -> list[str]:
     if mode == "topic":
         return _topic_filter(case)
-    found = retrieval.search(case["query"], case["product"], case["country"], limit=TOP, mode=mode)
+    found = retrieval.search(case["query"], case["product"], case["country"], limit=TOP, mode=mode,
+                             audience=case.get("audience", "doctor"))
     return [block["block_id"] for block in found]
 
 

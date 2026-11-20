@@ -33,10 +33,9 @@ def test_a_block_withdrawn_before_the_send_sends_nothing():
     cases.set_autonomy("DE", False, RAMAN)
     doc = run("inq-101")
     before = set(outbox())
-    assert cases.withdraw(doc["draft"]["segments"][0]["block_id"], WEBER, "Label update")["queued"]
-    cases.process_invalidations()
-    result = cases.approve("inq-101", BRANDT, sign(BRANDT))
-    assert result["status"] == "blocked_at_send" and not result.get("delivery_id")
+    assert cases.withdraw(doc["draft"]["segments"][0]["block_id"], WEBER, "Label update")["invalidated"] == ["inq-101"]
+    with pytest.raises(cases.Denied):
+        cases.approve("inq-101", BRANDT, sign(BRANDT))
     assert set(outbox()) == before
 
 

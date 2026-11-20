@@ -17,6 +17,7 @@ export const STATUS = {
   with_specialist: 'With a specialist',
   declined: 'Declined, not answered',
   blocked_at_send: 'Blocked at send',
+  invalidated_source_withdrawn: 'Source withdrawn',
   rejected: 'Rejected by reviewer',
 };
 

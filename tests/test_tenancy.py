@@ -7,6 +7,7 @@ from hcpagents import db, infra, store
 
 pytestmark = pytest.mark.floci
 
+ZONES = ["public", "medical", "commercial", "safety", "shared"]
 NOT_TENANT_DATA = {"schema_migrations"}  # owner-only bookkeeping; the app role has no grant on it
 
 
@@ -22,12 +23,15 @@ def owner():
 def test_every_table_forces_row_level_security_with_a_tenant_policy():
     with owner() as conn:
         tables = conn.execute(
-            "SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity FROM pg_class c "
-            "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r'").fetchall()
-        policies = {r[0]: r[1] for r in conn.execute("SELECT tablename, qual FROM pg_policies WHERE schemaname = 'public'")}
-    assert {t[0] for t in tables} >= {"docs", "tenants"}
+            "SELECT n.nspname || '.' || c.relname, c.relrowsecurity, c.relforcerowsecurity FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = ANY(%s) AND c.relkind = 'r'", (ZONES,)).fetchall()
+        policies = {}
+        for schema, table, qual in conn.execute("SELECT schemaname, tablename, qual FROM pg_policies WHERE schemaname = ANY(%s)", (ZONES,)):
+            policies[f"{schema}.{table}"] = policies.get(f"{schema}.{table}", "") + qual
+    assert {t[0] for t in tables} >= {"public.docs", "public.tenants", "medical.docs", "commercial.docs", "safety.docs",
+                                      "shared.contact_hold"}
     for name, enabled, forced in tables:
-        if name in NOT_TENANT_DATA:
+        if name.removeprefix("public.") in NOT_TENANT_DATA:
             continue
         assert enabled and forced, f"{name} must ENABLE and FORCE row level security"
         assert "app.tenant_id" in policies.get(name, ""), f"{name} needs a policy on app.tenant_id"
@@ -73,14 +77,14 @@ def test_every_table_a_migration_creates_declares_forced_rls_and_a_policy():
     import re
 
     sql = "\n".join(f.read_text() for f in sorted(db.MIGRATIONS.glob("*.sql")))
-    created = re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?(\w+)", sql)
-    assert "docs" in created
+    created = re.findall(r"CREATE TABLE (?:IF NOT EXISTS )?(\w+(?:\.\w+)?)", sql)
+    assert "docs" in created and "shared.contact_hold" in created
     for table in created:
         if table in NOT_TENANT_DATA:
             continue
         assert f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;" in sql, table
         assert f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY;" in sql, table
-        assert re.search(rf"CREATE POLICY \w+ ON {table}\s+USING \(\w+ = current_setting\('app\.tenant_id', true\)\)", sql), table
+        assert re.search(rf"CREATE POLICY \w+ ON {re.escape(table)}\s+(?:TO [\w, ]+\s+)?USING \(\w+ = current_setting\('app\.tenant_id', true\)\)", sql), table
 
 
 def test_no_api_route_is_registered_after_the_page_catch_all():

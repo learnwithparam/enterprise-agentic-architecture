@@ -33,3 +33,12 @@ def test_step_4_a_token_from_another_case_stays_a_token():
     # Step 4
     other_case = {"[NAME_1]": "Someone Else"}
     assert phi_vault.swap_back("Call [PHONE_1]", other_case) == "Call [PHONE_1]"
+
+
+def test_step_5_a_patient_name_a_birth_date_and_an_address_are_tokens_too():
+    # Step 5
+    text = "Patient Maria Lopez, born 4 March 1961, lives at 12 Elm Street. Veltrona dose in renal impairment?"
+    safe = phi_vault.swap_out(text, {})
+    for real in ("Lopez", "1961", "Elm Street"):
+        assert real not in safe
+    assert "Veltrona" in safe and "renal impairment" in safe

@@ -34,3 +34,6 @@ Read `docs/architecture-walkthrough.md` first for how the parts fit together.
 | [Redraft a failed check once](redraft-a-failed-check-once/) | A failed grounding check gets one redraft, then a person | No |
 | [Tokenise PHI with a vault](tokenise-phi-with-a-vault/) | The model sees tokens and the reply is restored from a sealed per-case vault | No |
 | [Pin MCP tools with description hashes](pin-mcp-tools-with-description-hashes/) | A tool whose description changed is not served | No |
+| [Keep safety intake moving with a manual queue](keep-safety-intake-moving-with-a-manual-queue/) | A failed detector hands notes to a person and drops none | No |
+| [Split data into zones](split-data-into-zones/) | Marketing sees that contact is on hold, never the medical case behind it | Yes |
+| [Bind the signature to the reply](bind-the-signature-to-the-reply/) | A reply changed after signing is never sent, and a withdrawal closes the draft | Yes |

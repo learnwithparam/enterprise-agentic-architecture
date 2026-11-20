@@ -124,7 +124,14 @@ class Case:
     async def safety_screen(self, _context) -> dict:
         text = self.full_text()
         hits = rules.safety_screen(text)
-        out = await self.agent("safety", f"{untrusted_header()}\n{agents.untrusted(self.thread_text())}")
+        # Step 1: Keep the rule hits first. A model that fails must never take them away.
+        self.doc["signals"] = hits
+        try:
+            out = await self.agent("safety", f"{untrusted_header()}\n{agents.untrusted(self.thread_text())}")
+        except agents.EscalateToHuman:
+            if not hits:
+                raise
+            return {"facts": {"ae": True}, "detail": hits}
         for signal in out["signals"]:
             quote = phi_vault.restore(signal["quote"], self.doc["id"])
             hits.append({"kind": signal["kind"].replace("_", " "), "quote": quote, "source": "safety agent",
@@ -182,6 +189,7 @@ class Case:
         result = await agent_redraft.verify_with_one_redraft(ids, self.check_ids, self.redraft)
         segments = result["segments"]
         doc["draft"] = {"segments": segments, "text": grounding.render(segments)}
+        doc["draft_version"] = doc.get("draft_version", 0) + 1
         doc["verification"] = result["verification"]
         doc["redrafts"] = result["redrafts"]
         return {"facts": {"grounded": doc["verification"]["grounded"]}, "detail": doc["verification"]["problems"]}

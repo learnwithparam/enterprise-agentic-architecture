@@ -6,7 +6,7 @@ Each safety intake has a 24 hour clock. It starts when the signal came in.
 
 from datetime import UTC, datetime, timedelta
 
-from hcpagents import events, ledger, store
+from hcpagents import events, ledger, safety_clock, store
 from hcpagents.case_core import restore
 from hcpagents.infra import QUEUES
 
@@ -89,6 +89,7 @@ def safety_signal(detail: dict) -> None:
     store.put("mi-pv-intake", {"id": f"pv-{detail['case']}", "case": detail["case"], "status": "open",
                                "received": received.isoformat(timespec="seconds"),
                                "report_due": (received + DAY_ZERO).isoformat(timespec="seconds"),
+                               "ack_due": safety_clock.ack_due(received).isoformat(timespec="seconds"),
                                "signal": {key: value for key, value in detail.items()
                                           if key not in ("tenant", "event_id")}})
 

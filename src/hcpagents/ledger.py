@@ -116,6 +116,15 @@ def _sign(entry_hash: str) -> str:
     return signed["Signature"].hex()
 
 
+def seal(message: str) -> str:
+    """Sign a message with the ledger key. An approval uses it, so the signature can be checked later by anyone."""
+    return _sign(message)
+
+
+def seal_ok(message: str, signature_hex: str) -> bool:
+    return _signature_ok(message, signature_hex)
+
+
 def _signature_ok(entry_hash: str, signature_hex: str) -> bool:
     kms = client("kms")
     try:

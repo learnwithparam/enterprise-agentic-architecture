@@ -54,12 +54,21 @@ def test_nobody_approves_on_a_pharmacovigilance_case():
         cases.approve("inq-105", HALE, sign(HALE))
 
 
-def test_withdrawn_content_invalidates_the_draft_and_blocks_the_send():
+def test_withdrawn_content_invalidates_the_draft_at_once_and_it_cannot_be_approved():
     run("inq-103")
     with pytest.raises(cases.Denied):
         cases.withdraw("VEL-DE-RENAL", BECKER, "not my job")
-    assert cases.withdraw("VEL-DE-RENAL", WEBER, "Label update")["queued"]
-    assert cases.process_invalidations()["cases"] == ["inq-103"]  # what the steward does on its next pass
+    assert cases.withdraw("VEL-DE-RENAL", WEBER, "Label update")["invalidated"] == ["inq-103"]  # no wait for the steward
+    assert store.get("mi-cases", "inq-103")["status"] == "invalidated_source_withdrawn"
+    assert cases.process_invalidations()["cases"] == []  # the steward finds nothing left to do
+    with pytest.raises(cases.Denied, match="invalidated_source_withdrawn"):
+        cases.approve("inq-103", BRANDT, sign(BRANDT))
+
+
+def test_content_pulled_outside_withdraw_still_blocks_the_send():
+    run("inq-103")
+    block = store.get("mi-content", "VEL-DE-RENAL")
+    store.put("mi-content", block | {"status": "withdrawn"})  # as an event from the MLR feed would leave it
     d = cases.approve("inq-103", BRANDT, sign(BRANDT))
     assert d["status"] == "blocked_at_send"
     assert any("withdrawn" in p for p in d["send_check"]["problems"])

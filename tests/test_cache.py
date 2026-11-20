@@ -7,7 +7,7 @@ import uuid
 import pytest
 import valkey
 
-from hcpagents import auth, cache, cases, durable, infra, ledger, retrieval, world
+from hcpagents import auth, cache, cases, durable, events, infra, ledger, retrieval, store, world
 
 pytestmark = pytest.mark.floci
 
@@ -61,6 +61,13 @@ def test_a_failed_eviction_is_recorded_and_the_withdrawal_still_happens(monkeypa
     assert "cache_evict_failed" in [r["entry"]["type"] for r in ledger.entries()]
 
 
+def _pull_from_the_feed(block_id):
+    """A withdrawal that arrives as an event only, as the MLR feed would send it. withdraw() is not called."""
+    block = store.get("mi-content", block_id)
+    store.put("mi-content", block | {"status": "withdrawn"})
+    events.publish("ContentWithdrawn", {"tenant": world.current_tenant(), "block": block_id, "version": block["version"]})
+
+
 def test_the_always_on_steward_invalidates_a_draft_when_content_is_withdrawn():
     """No caller processes the event: the steward workflow finds it on its own."""
     asyncio.run(cases.run("inq-103"))
@@ -69,11 +76,12 @@ def test_the_always_on_steward_invalidates_a_draft_when_content_is_withdrawn():
         client, queue = await durable.connect(), f"q-{uuid.uuid4().hex}"
         async with durable.worker(client, queue):
             await durable.start_steward(client, queue, poll_seconds=0.2)
-            cases.withdraw("VEL-DE-RENAL", WEBER, "Label update")
+            _pull_from_the_feed("VEL-DE-RENAL")
             async with asyncio.timeout(20):
                 while "draft_invalidated" not in [r["entry"]["type"] for r in ledger.entries("inq-103")]:
                     await asyncio.sleep(0.2)
 
     asyncio.run(scenario())
-    assert any("withdrawn" in p for p in cases.approve("inq-103", BRANDT, auth.reauthenticate(BRANDT, auth.local_password(BRANDT["id"])))["send_check"]["problems"])
+    with pytest.raises(cases.Denied):
+        cases.approve("inq-103", BRANDT, auth.reauthenticate(BRANDT, auth.local_password(BRANDT["id"])))
 

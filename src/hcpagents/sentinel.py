@@ -8,7 +8,7 @@ It acts alone only to lower risk. It can freeze, but it can never lift a freeze.
 
 from datetime import UTC, datetime
 
-from hcpagents import db, events, ledger, parallel, rules, store
+from hcpagents import db, events, ledger, parallel, rules, safety_clock, store
 
 QUEUE = "mi-interactions"
 
@@ -19,12 +19,30 @@ def _interaction(interaction_id: str) -> dict | None:
                             (interaction_id,)).fetchone()
 
 
+def _screen(event: dict) -> tuple[dict | None, list[dict]] | None:
+    """Read the note and screen it. If the detector is down or fails, a person screens it instead and this gives back None."""
+    manual = {"id": event["interaction"]}
+    if safety_clock.detector_is_down():
+        safety_clock.send_to_manual_screening(manual, "no healthy detector pass for two hours")
+        return None
+    try:
+        row = _interaction(event["interaction"])
+        hits = []
+        if row:
+            hits = rules.safety_screen(row["body"])
+    except Exception as error:
+        safety_clock.send_to_manual_screening(manual, f"the detector failed: {type(error).__name__}")
+        return None
+    safety_clock.heartbeat()
+    return row, hits
+
+
 def _perceive(event: dict) -> bool:
     # Step 1: Read the note and run the safety screen.
-    row = _interaction(event["interaction"])
-    hits = []
-    if row:
-        hits = rules.safety_screen(row["body"])
+    screened = _screen(event)
+    if screened is None:
+        return False
+    row, hits = screened
     # Step 2: A note with no hit is left alone.
     if not hits:
         return False
