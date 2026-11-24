@@ -16,6 +16,17 @@ The case study is the first three weeks of a real engagement, squeezed into one 
 | Review with Compliance and Medical | 13 to 14 | Every refusal is walked through and signed off | `docs/product-walkthrough.md` |
 | Read out | 15 | The steering group chooses the first release scope | Part A section 5, this plan |
 
+The stages in order. Evidence, not a date, closes each one.
+
+```mermaid
+flowchart LR
+  A[Listen] --> B[Test the riskiest assumptions]
+  B --> C[Decide the architecture]
+  C --> D[Build the slice]
+  D --> E[Review with Compliance]
+  E --> F[Read out]
+```
+
 ## Listen, days 1 to 2
 
 **Who:** the head of medical information, a German medical reviewer, the pharmacovigilance intake lead, a brand lead, the CRM owner, a compliance officer and the platform team on AWS.

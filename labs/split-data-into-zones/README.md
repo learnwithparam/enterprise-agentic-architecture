@@ -9,7 +9,14 @@ nothing but a code review kept it from showing more.
 **After:** medical, commercial and safety data live in separate database schemas, each with its own login.
 The commercial login has no privilege on the other two. The only thing that crosses is a hold: a doctor, a
 product and a reason, with no case id and no text. The database writes the hold itself, so no code path can
-put a case id into it. Cedar decides who gets the medical view.
+put a case id into it.
+
+Cedar decides who gets the medical view.
+
+## What you will learn
+
+- Explain the three data zones and who may read each.
+- Prove that marketing sees a hold, never the case behind it.
 
 ## Prerequisites
 
@@ -36,6 +43,12 @@ make lab N=split-data-into-zones
 
 Expect: `4 passed`
 
+## See it in the console
+
+![A field rep cannot read case detail. The commercial view hides the medical case.](../../docs/product-walkthrough-shots/field-rep-denied-desktop.webp)
+
+A field rep cannot read case detail. The commercial view hides the medical case.
+
 ## Read
 
 - `migrations/008_zones.sql`: the schemas, the roles, the policies and the two trigger functions.
@@ -59,6 +72,30 @@ rep is handed the medical view. Put it back.
 
 Separate AWS accounts for the zones, one KMS key for each zone (the stack already makes them), and an audit
 of every cross-zone read. This build separates the zones inside one database cluster.
+
+## Check yourself
+
+<details>
+<summary>A doctor has an open medical case. What does marketing see?</summary>
+
+That contact is on hold. Never the case id or its text.
+
+</details>
+
+<details>
+<summary>Can any login write a hold directly?</summary>
+
+No. Only closing the last open case lifts it.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#3 Give the chatbot its own ingest channel](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/3)
+- [#29 Prove each known limit is still true](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/29)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

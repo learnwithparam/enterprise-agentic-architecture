@@ -7,9 +7,16 @@ too, and the count of calls a tenant makes in a day.
 **Before:** the only brake is money, and it is checked in one process. A restart forgets it.
 
 **After:** a case may run at most six agent runs and twelve model calls, retries included. A tenant may make
-at most 5000 calls a day. The case counts come from the saved case, and the day count is a document in the
-tenant's own store, so a new worker sees the same numbers. Past a cap, no call is made. The ledger gets an
+at most 5000 calls a day. The case counts come from the saved case. The day count is a document in the
+tenant's own store, so a new worker sees the same numbers.
+
+Past a cap, no call is made. The ledger gets an
 entry named `cap_refused` with the reason, and the case goes to a person with the rule `cap_exceeded`.
+
+## What you will learn
+
+- Explain the three caps on model calls.
+- Prove that each cap refuses on its own and names itself.
 
 ## Prerequisites
 
@@ -61,6 +68,28 @@ fails: a tenant could spend with no daily limit. Put it back.
 
 `tests/test_live_g_caps.py` runs a real case. It shows the model is never called after a refusal and that the
 kernel turns the refusal into a review with the rule `cap_exceeded`.
+
+## Check yourself
+
+<details>
+<summary>Does a retry on Sonnet count against the cap?</summary>
+
+Yes. It counts as a call.
+
+</details>
+
+<details>
+<summary>What happens with no day cap?</summary>
+
+A tenant could spend with no daily limit.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

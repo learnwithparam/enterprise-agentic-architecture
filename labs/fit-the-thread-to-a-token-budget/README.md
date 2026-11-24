@@ -9,8 +9,14 @@ out of the window.
 
 **After:** the case counts tokens for every model call. It keeps the question and the newest message, then
 adds older messages from the newest back while they fit. The oldest go first. Nothing is summarised by a
-model, so nothing is invented. The ledger says how many messages were left out, and the full thread stays in
-the case. The plain safety rules still read the whole thread, so a side effect in an old message is found.
+model, so nothing is invented. The ledger says how many messages were left out, and the full thread stays in the case.
+
+The plain safety rules still read the whole thread, so a side effect in an old message is found.
+
+## What you will learn
+
+- Explain which turns go first when a thread is too long.
+- Prove that the question is never cut.
 
 ## Prerequisites
 
@@ -65,6 +71,28 @@ Put it back.
 
 `tests/test_live_g_context.py` runs a real case. It checks the model prompt stays under the budget and that
 the ledger entry `context_trimmed` names how many messages were dropped.
+
+## Check yourself
+
+<details>
+<summary>A thread is too long. Which turns are dropped?</summary>
+
+The oldest turns. The newest turn stays.
+
+</details>
+
+<details>
+<summary>The question alone does not fit. What happens?</summary>
+
+It goes to a person. It is not cut.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

@@ -9,6 +9,11 @@ client's medical content.
 **After:** Postgres enforces it. Every table forces row level security with a policy on `app.tenant_id`, and
 the app role has no way around it (ADR 0009 and 0011).
 
+## What you will learn
+
+- Prove that the database, not the code, refuses another tenant's rows.
+- Find the migration line that turns the rule on.
+
 ## Prerequisites
 
 Docker, [uv](https://docs.astral.sh/uv/) and `make up`. No API key.
@@ -64,6 +69,28 @@ every other. Put it back.
 
 One more policy per new table, checked by the schema walk in `tests/test_tenancy.py`, and a migration that
 cannot land without it.
+
+## Check yourself
+
+<details>
+<summary>The app connects with no tenant set. How many rows does it see?</summary>
+
+None.
+
+</details>
+
+<details>
+<summary>Why use row level security when the code filters by tenant too?</summary>
+
+A code bug could forget a filter. The database refuses the rows anyway.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

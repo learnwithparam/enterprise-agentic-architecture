@@ -1,7 +1,45 @@
 # Build an agentic AI system for a regulated company
 
-Project 1 of the Agentic AI Buildcamp for Engineers & PMs. Four 10-minute sessions, each with a lab you run
-and a test that proves the property.
+Project 1 of the Agentic AI Buildcamp for Engineers & PMs. Four short sessions, each with a lab you run
+and a test that proves the property. You can also learn alone: read a lab, run it, break it, then fix a
+learner issue.
+
+## Goals of learning
+
+By the end you can:
+
+- **Trace** a doctor's question from the inbox to a sent reply, a reviewer or pharmacovigilance.
+- **Prove** that every sentence of a reply comes from current, approved content.
+- **Explain** why the model sets facts but plain rules pick the route.
+- **Write** a Cedar policy that limits what an agent may read.
+- **Find** an edit to the audit trail with a hash chain.
+- **Measure** a release with an eval gate that fails on one missed adverse event.
+- **Fix** a real gap in this system, with a test that fails first.
+
+## The system in one picture
+
+```mermaid
+flowchart LR
+  A[Doctor asks a question] --> B[Safety screen first]
+  B --> C[Agents pick approved blocks]
+  C --> D[Grounding check per sentence]
+  D --> E[Routing table decides]
+  E --> F[Reply, reviewer or safety team]
+  F --> G[Hash chained ledger]
+```
+
+The model never picks the route. It sets facts, and the routing table reads them in a fixed order.
+
+## The learning path
+
+```mermaid
+flowchart LR
+  A[1. Route inquiries] --> B[2. Ground replies]
+  B --> C[3. Guard tool calls]
+  C --> D[4. Gate releases]
+  D --> E[Labs beyond the sessions]
+  E --> F[Fix a learner issue]
+```
 
 | Session | What you build | Labs |
 |---|---|---|
@@ -13,7 +51,9 @@ and a test that proves the property.
 
 **The job:** answer doctors' product questions for a pharmaceutical company in minutes instead of days. Never send a sentence that Compliance cannot trace to current, approved content. Never miss an adverse event.
 
-Quillon Biopharma is synthetic. So is every doctor, product and content block. The architecture is the real one. The agents run on the Claude Agent SDK, on `claude-haiku-5-5` or `claude-sonnet-5-5`. The AWS services run locally on [Floci](https://floci.io/). The same boto3 code runs against AWS.
+Quillon Biopharma is synthetic. So is every doctor, product and content block. The architecture is the real one.
+
+The agents run on the Claude Agent SDK, on `claude-haiku-5-5` or `claude-sonnet-5-5`. The AWS services run locally on [Floci](https://floci.io/). The same boto3 code runs against AWS.
 
 | Before | After, in this repository |
 |---|---|
@@ -23,7 +63,13 @@ Quillon Biopharma is synthetic. So is every doctor, product and content block. T
 | Permissions live in application code | Every permission is a Cedar policy in Verified Permissions, including the agents' own tool calls |
 | Audit is a log someone could edit | A hash-chained ledger, archived under S3 Object Lock, where any edit is found |
 
-![The inbox: every inquiry with its route and the reason for it](docs/product-walkthrough-shots/inbox-desktop.webp)
+## See it in the console
+
+| The inbox | A reply sent with its sources | The release gate |
+|---|---|---|
+| ![The inbox with each route and its reason](docs/product-walkthrough-shots/inbox-desktop.webp) | ![A sent reply that names the block behind each sentence](docs/product-walkthrough-shots/case-sent-desktop.webp) | ![The release gate with expected and actual routes](docs/product-walkthrough-shots/release-gate-desktop.webp) |
+
+Every screen is in the [product walkthrough](docs/product-walkthrough.md). `make walkthrough` takes the shots again.
 
 ## Run it
 
@@ -37,7 +83,13 @@ make serve    # the console on http://localhost:8765
 make check    # the gate: tests, labs, evals, mutants, prose, web build, diagrams
 ```
 
-Replay needs no key. Model calls replay from `recordings/` by default, so all of the above is free. `make record` and `make serve LIVE=1` need `ANTHROPIC_API_KEY`. For live calls, copy `.env.example` to a file named `.env` (git ignores it) and set `ANTHROPIC_API_KEY`. Then run `make serve LIVE=1`. The repo reads that file into its own process only. Nothing sources it. `make record` calls Haiku 5.5 for every inquiry. That costs about two cents in total, under the spend cap in `policies/autonomy.toml`.
+Expect: `make check` ends with no failures, and the console opens on the inbox.
+
+Replay needs no key. Model calls replay from `recordings/` by default, so all of the above is free. `make record` and `make serve LIVE=1` need `ANTHROPIC_API_KEY`.
+
+For live calls, copy `.env.example` to a file named `.env` (git ignores it) and set `ANTHROPIC_API_KEY`. Then run `make serve LIVE=1`. The repo reads that file into its own process only. Nothing sources it.
+
+`make record` calls Haiku 5.5 for every inquiry. That costs about two cents in total, under the spend cap in `policies/autonomy.toml`.
 
 ## Read it
 
@@ -48,12 +100,27 @@ The four sessions teach the build. These pages are the reading around it. A PM s
 - [Case study](docs/case-study.md): the platform, agentic AI in a regulated setting, the delivery plan, and why this slice.
 - [Architecture walkthrough](docs/architecture-walkthrough.md): each part, and the three flows Compliance cares about, traced through the code.
 - [Product walkthrough](docs/product-walkthrough.md): the console screen by screen, with the moments it refuses to answer or act.
-- [Coverage](docs/coverage.md): every ask in the case study, every role requirement and every agentic concept, with the doc, screen, lab and test for each, checked by `tests/test_coverage.py`.
+- [Coverage](docs/coverage.md): every ask in the case study, role requirement and agentic concept. Each row names its doc, screen, lab and test, and `tests/test_coverage.py` checks it.
 - [Validation pack](docs/validation-pack.md): a GAMP 5 style map from each requirement to its test and mutant.
 - [EU AI Act classification](docs/eu-ai-act.md): where each agent falls and which control meets each duty.
 - [Delivery plan](docs/delivery-plan.md): from first conversations to a first release in Germany.
 - [Architecture decisions](docs/adr/README.md): each one names the failure it prevents and the test that enforces it.
 - [Labs](labs/README.md): one property per lab, a test that proves it, and a change that breaks it.
+
+## Learn by fixing an issue
+
+The [learner issues](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment) are real gaps in this system. Each one says what you will learn, how to see the gap, and when it is done. Labels name the area (`area:input`, `area:output`, `area:testing`, `area:grounding`, `area:agentic`) and the level (`level:starter`, `level:core`, `level:stretch`).
+
+```mermaid
+flowchart LR
+  A[Pick an issue] --> B[Read its lab]
+  B --> C[Write a failing test]
+  C --> D[Fix the code]
+  D --> E[Run make check]
+  E --> F[Open a pull request]
+```
+
+Start with a `level:starter` issue. Each lab page also lists its own issues under **Try next**.
 
 ## Layout
 

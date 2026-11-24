@@ -9,10 +9,14 @@ background call uses either.
 tool. A settings file switches the small model. So the run that passed the gate is not the run in
 production.
 
-**After:** `agents._options` builds every agent's `ClaudeAgentOptions` the same way: `model` pinned,
-`setting_sources=[]`, `strict_mcp_config=True`, no plugins, slash commands disabled, built-in tools off,
-and the background model environment variables pinned to the same id. Every result is checked for the
+**After:** `agents._options` builds every agent's `ClaudeAgentOptions` the same way. It has `model` pinned,
+`setting_sources=[]`, `strict_mcp_config=True`, no plugins, slash commands disabled, built-in tools off. The background model environment variables are pinned to the same id. Every result is checked for the
 models it used. The cost comes from the tokens, at Haiku 5.5 prices.
+
+## What you will learn
+
+- Prove that every agent runs on an allowed model with nothing loaded from your machine.
+- Compute the bill for a call from its token counts.
 
 ## Prerequisites
 
@@ -67,6 +71,29 @@ lab. The isolation test fails: the agent would now load your own Claude settings
 The same options are used with `CLAUDE_CODE_USE_BEDROCK=1` and a Bedrock inference profile for Haiku 5.5 in
 the client's region. The spend cap per case and per session stays in code. The runtime's own budget is a
 backstop, not the control.
+
+## Check yourself
+
+<details>
+<summary>Why does a prompt change make old recordings useless?</summary>
+
+The prompt is part of the recording key, so an old recording cannot pass for the new prompt.
+
+</details>
+
+<details>
+<summary>What goes wrong if the agent loads your own Claude settings?</summary>
+
+Your settings could change its model or tools, so the run is no longer the one we tested.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#19 Test the container choice](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/19)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

@@ -9,10 +9,14 @@ costs a person's time. The opposite risk is a loop that keeps asking the model u
 
 **After:** a failed check gets exactly one redraft. The model picks blocks again and is told what failed. The
 same check reads the new pick. If it fails again, or the model returns no usable block, the case is not
-grounded and the routing table sends it to a reviewer. The model never writes the reply. It only picks ids.
+grounded and the routing table sends it to a reviewer. The model only picks ids and never writes the reply.
 
-A refused pick is also told why. When the plan drops an id that no search returned for this product and
-country, the next try names the refused id and says to choose only ids a search returns.
+A refused pick is also told why. The plan may drop an id that no search returned for this product and country. Then the next try names the refused id and says to choose only ids a search returns.
+
+## What you will learn
+
+- Explain why a failed check gets one redraft and no more.
+- Prove that a second failure goes to a person.
 
 ## Prerequisites
 
@@ -46,6 +50,12 @@ make lab N=redraft-a-failed-check-once
 
 Expect: 5 passed
 
+## See it in the console
+
+![A draft that waits for a reviewer. This is where a reply lands after a failed redraft.](../../docs/product-walkthrough-shots/case-review-desktop.webp)
+
+A draft that waits for a reviewer. This is where a reply lands after a failed redraft.
+
 ## Read
 
 - `src/hcpagents/agent_redraft.py`: `verify_with_one_redraft` and `usable_ids`.
@@ -67,6 +77,28 @@ no usable block fails: an empty redraft would be checked as a reply with no answ
 
 `tests/test_live_g_redraft.py` runs a real case through the assembler agent. It checks that the redraft is
 written to the ledger with its problems and that a failed redraft routes to a reviewer.
+
+## Check yourself
+
+<details>
+<summary>A reply passes its grounding check. Is it redrafted?</summary>
+
+No. Only a failed reply gets a redraft.
+
+</details>
+
+<details>
+<summary>The redraft fails too. What happens?</summary>
+
+It is not retried again. A person takes it.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

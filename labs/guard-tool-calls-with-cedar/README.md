@@ -12,6 +12,11 @@ allowlist and the case's country and product in code. Then it asks Amazon Verifi
 `policies/cedar/agents.cedar` says the same thing in a language Compliance can read. Either check alone can
 refuse.
 
+## What you will learn
+
+- Run a tool call through two checks: the code guard and Cedar.
+- Prove that Verified Permissions refuses another country on its own.
+
 ## Prerequisites
 
 Docker, [uv](https://docs.astral.sh/uv/) and `make up` (Floci and the policy store).
@@ -48,6 +53,12 @@ make lab N=guard-tool-calls-with-cedar
 
 Expect: 3 passed
 
+## See it in the console
+
+![Agent calls and guards. Every tool call shows Allowed and the Cedar policy that allowed it.](../../docs/product-walkthrough-shots/case-guards-desktop.webp)
+
+Agent calls and guards. Every tool call shows Allowed and the Cedar policy that allowed it.
+
 ## Read
 
 - `src/hcpagents/guards.py` and `src/hcpagents/authz.py`.
@@ -64,13 +75,34 @@ Expect: 3 passed
 ## Break it, watch the test fail
 
 In `policies/cedar/agents.cedar`, replace the `when { ... }` block with `when { principal.kind == "agent" };`
-and rerun the lab. The store is keyed on a hash of the Cedar files, so the edited policy is the one in
-force, and the "another country" test fails. Put the block back.
+and rerun the lab. The store is keyed on a hash of the Cedar files, so the edited policy is the one in force. The "another country" test fails. Put the block back.
 
 ## What production adds
 
 The same policy store and the same `is_authorized` call are used. The entities come from the identity
 provider's claims. Each decision lands on the ledger with the policy file that made it.
+
+## Check yourself
+
+<details>
+<summary>Why check in Cedar when the code already checks the country?</summary>
+
+So one bug in the code guard is not enough to leak another country's content.
+
+</details>
+
+<details>
+<summary>What happens to a tool that is not on the allowlist?</summary>
+
+It is refused before the policy store is even asked.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 
