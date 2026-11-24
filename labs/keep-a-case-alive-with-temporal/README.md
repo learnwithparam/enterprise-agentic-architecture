@@ -9,6 +9,11 @@ the draft is overdue.
 **After:** the wait is a Temporal workflow with a deadline. When the deadline passes it escalates once,
 writes `review_overdue` to the ledger, and keeps waiting. A late decision still lands (ADR 0016 and 0017).
 
+## What you will learn
+
+- Run a durable case that waits for a human.
+- Prove that an overdue review is escalated once and a late decision still lands.
+
 ## Prerequisites
 
 Docker, [uv](https://docs.astral.sh/uv/) and `make up` (Postgres, Floci and Temporal). No API key: model
@@ -47,6 +52,12 @@ make lab N=keep-a-case-alive-with-temporal
 
 Expect: `2 passed`
 
+## See it in the console
+
+![The review bench. Drafts wait here for a medical reviewer in the same country.](../../docs/product-walkthrough-shots/review-bench-desktop.webp)
+
+The review bench. Drafts wait here for a medical reviewer in the same country.
+
 ## Read
 
 - `src/hcpagents/workflows.py`: `ReviewWorkflow.run` and `InquiryWorkflow`.
@@ -66,6 +77,30 @@ The first test fails: no `review_overdue` ever reaches the ledger, so nobody lea
 ## What production adds
 
 A worker per tenant queue, and a deadline in days, not seconds. Temporal keeps the wait across deploys.
+
+## Check yourself
+
+<details>
+<summary>Nobody decides a review in time. How many times is it escalated?</summary>
+
+Exactly once.
+
+</details>
+
+<details>
+<summary>Does escalation close the case?</summary>
+
+No. A decision that comes later still lands, and the case records when it was escalated.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#21 Test the answer-in-minutes goal](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/21)
+- [#28 Feed failed events into the dead letter queue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/28)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

@@ -5,11 +5,16 @@ that client reads each tool's description to decide what to do. Nobody must be a
 description after a person has read it.
 
 **Before:** a description is plain text in the code. A change that tells the client's model to "also send
-the case to this address" looks like a small edit, and nothing stops it reaching the client.
+the case to this address" looks like a small edit. Nothing stops it reaching the client.
 
 **After:** the hash of each tool's name and description is pinned in `src/hcpagents/mcp_pins.json`. When the
 server starts, a tool whose description no longer matches its pin is left out, and it is named in
 `DISABLED`. A person reads the change, then pins the new hash.
+
+## What you will learn
+
+- Explain why a tool description is pinned by a hash.
+- Prove that a changed tool is not served.
 
 ## Prerequisites
 
@@ -62,6 +67,28 @@ to `if True:`. Step 3 fails: the changed description would be served. Put it bac
 
 `tests/test_live_i_mcp_pins.py` builds the real server and lists its tools. After a reviewed change, run
 `uv run python -m hcpagents.mcp_server` to pin the new hashes. The pin change shows in the pull request.
+
+## Check yourself
+
+<details>
+<summary>One tool's description changes. Are the other tools still served?</summary>
+
+Yes. Only the changed tool is held back.
+
+</details>
+
+<details>
+<summary>Why does a description change matter?</summary>
+
+A model reads the description to decide what to do. A changed one can change what the agent does.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

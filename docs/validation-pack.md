@@ -23,6 +23,15 @@ A computer system that supports a regulated process must be checked before use. 
 
 A mutant is an edit that breaks the property. The gate fails if no test notices it. That is what makes the test evidence and not decoration. `tests/test_coverage.py` fails when a test or mutant named here does not exist.
 
+Each row below follows one chain:
+
+```mermaid
+flowchart LR
+  A[A requirement] --> B[A test that proves it]
+  B --> C[A mutant that breaks it]
+  C --> D[Gate fails if unnoticed]
+```
+
 | Requirement | Test | Mutant |
 |---|---|---|
 | A possible adverse event always reaches pharmacovigilance | `tests/test_rules.py::test_keyword_screen_catches_english_adverse_events` | An adverse event always goes to pharmacovigilance |

@@ -9,6 +9,11 @@ must stop being sendable.
 **After:** a sentinel reads every channel on its own and raises a safety signal once per event. A steward
 watches content and invalidates drafts the moment a block is withdrawn (ADR 0018 and 0024).
 
+## What you will learn
+
+- Trace a safety signal that arrives with nobody asking.
+- Prove that a withdrawn block blocks the drafts that quoted it.
+
 ## Prerequisites
 
 Docker, [uv](https://docs.astral.sh/uv/) and `make up` (Postgres, Floci and Temporal). No API key.
@@ -43,6 +48,12 @@ make lab N=watch-with-the-sentinel-and-steward
 
 Expect: `3 passed`
 
+## See it in the console
+
+![An adverse event case. Pharmacovigilance owns it and the AI writes no reply.](../../docs/product-walkthrough-shots/case-adverse-event-desktop.webp)
+
+An adverse event case. Pharmacovigilance owns it and the AI writes no reply.
+
 ## Read
 
 - `src/hcpagents/sentinel.py` and `src/hcpagents/events.py`.
@@ -63,6 +74,29 @@ In `src/hcpagents/sentinel.py`, change `hits = rules.safety_screen(row["body"]) 
 ## What production adds
 
 Per tenant queues, a dead letter queue for events that keep failing, and an alarm on the dead letters.
+
+## Check yourself
+
+<details>
+<summary>A rep's note mentions a rash. Who acts first?</summary>
+
+The sentinel. It sends the note to pharmacovigilance without anyone calling it.
+
+</details>
+
+<details>
+<summary>The same event is read twice. How many signals are raised?</summary>
+
+One.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#17 Prove the EU AI Act classification](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/17)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

@@ -8,9 +8,13 @@ may go out that a human should have reviewed. No call may use a model outside th
 **Before:** someone tries a few questions in a playground and says it looks fine.
 
 **After:** `evals/gate.toml` is the release contract. `make evals` runs all twenty synthetic inquiries
-through the full graph and scores them. `make check` fails on any line that does not hold. Each inquiry
-lists its expected route. It also lists the more cautious routes that are safe. So caution passes and risk
+through the full graph and scores them. `make check` fails on any line that does not hold. Each inquiry lists its expected route and the more cautious routes that are safe. So caution passes and risk
 does not.
+
+## What you will learn
+
+- Run the release gate and read its report.
+- Prove that one missed adverse event fails a release.
 
 ## Prerequisites
 
@@ -49,6 +53,12 @@ Then `make evals` scores all twenty inquiries. Its last two lines are the totals
 
 Expect: 20 cases, route_acceptable 1.0, ae_recall 1.0, then `gate passed`
 
+## See it in the console
+
+![The release gate. Each case shows the route it should take and the route it took.](../../docs/product-walkthrough-shots/release-gate-desktop.webp)
+
+The release gate. Each case shows the route it should take and the route it took.
+
 ## Read
 
 - `evals/gate.toml` for the thresholds.
@@ -60,7 +70,7 @@ Expect: 20 cases, route_acceptable 1.0, ae_recall 1.0, then `gate passed`
 
 - A run where every case lands on its expected route passes.
 - One adverse event routed to a reviewer instead of pharmacovigilance fails the release on recall.
-- A more cautious route listed as also safe passes; sending what a human should review fails.
+- A more cautious route listed as also safe passes. Sending what a human should review fails.
 - One call on a model outside the allowlist fails the release.
 
 ## Break it, watch the test fail
@@ -70,9 +80,35 @@ would now ship a change that drops safety reports. Put it back to `1.0`.
 
 ## What production adds
 
-The same gate in CI on every pull request that touches a prompt, a model id, content or a policy, with
-`LIVE=1` against Bedrock on a schedule so drift in the model shows up even when the code has not changed.
+The same gate in CI on every pull request that touches a prompt, a model id, content or a policy. A run with `LIVE=1` against Bedrock on a schedule shows drift in the model even when the code has not changed.
 Per-call traces go to Langfuse for review.
+
+## Check yourself
+
+<details>
+<summary>One adverse event goes to a reviewer, not to pharmacovigilance. Does the release ship?</summary>
+
+No. Adverse event recall must be perfect, so the gate fails.
+
+</details>
+
+<details>
+<summary>A case takes a more careful route than expected. Does that fail?</summary>
+
+Not when that route is listed as also safe. Sending what a human should review does fail.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#11 Check that a multi-block reply answers the question](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/11)
+- [#13 Grow the eval set past twenty cases](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/13)
+- [#14 Score red team attacks against the model](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/14)
+- [#20 Make the coverage test check the subject](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/20)
+- [#22 Gate releases on outreach and fact-check cases](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/22)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

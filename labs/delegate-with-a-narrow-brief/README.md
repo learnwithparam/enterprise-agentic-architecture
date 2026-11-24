@@ -4,12 +4,16 @@
 Veltrona. It hands that one sub-question to a specialist step. The specialist must never see the doctor's
 contacts, consent or other cases, and the lead must never use an answer it has not checked.
 
-**Before:** the whole case goes to every helper, so a helper can leak a doctor's private notes, and the lead
-trusts whatever comes back, even a block from another country.
+**Before:** the whole case goes to every helper, so a helper can leak a doctor's private notes. The lead trusts whatever comes back, even a block from another country.
 
 **After:** the lead builds a brief for this question only: the facts of one country and the current blocks of
 one product. The specialist gets a copy of the brief. The lead then accepts an answer only if each block is
 in the brief and still current. Every outcome goes on the ledger.
+
+## What you will learn
+
+- Explain what a narrow brief hides from a helper.
+- Prove that a helper cannot widen its own context.
 
 ## Prerequisites
 
@@ -66,8 +70,29 @@ lead would use a United States block for a German doctor. Put it back.
 
 ## What production adds
 
-`outreach.ask_for_content` is the lead's entry point. It reads the content store as it is now, and the
-ledger entry names the case, the blocks and every problem, so Compliance can replay the delegation.
+`outreach.ask_for_content` is the lead's entry point. It reads the content store as it is now. The ledger entry names the case, the blocks and every problem, so Compliance can replay the delegation.
+
+## Check yourself
+
+<details>
+<summary>A helper tries to use a block that is not in its brief. What happens?</summary>
+
+The lead refuses it at the check.
+
+</details>
+
+<details>
+<summary>Does the helper see the doctor's name?</summary>
+
+No. It never sees the name, email, registry id, consent or case id.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

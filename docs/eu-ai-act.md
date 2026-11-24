@@ -17,6 +17,16 @@ The platform answers doctors about approved product facts. It screens messages f
 | Outreach coordinator holds or proposes contacts | Profiling of people | The people are professionals, the signal is consent and contact history, and nothing is denied to them | Reason and rule per hold, source interactions |
 | Insight agent clusters what doctors raise | Profiling | Output is for internal teams, names no doctor and quotes nobody | Two-doctor minimum, traced sources |
 
+How a feature is placed:
+
+```mermaid
+flowchart LR
+  A[A platform feature] --> B{An Annex III area?}
+  B -->|no| C[Limited risk]
+  B -->|yes| D[High-risk duties apply]
+  C --> E[Keep high-risk evidence anyway]
+```
+
 ## Duties and the control that meets each
 
 | Duty | Article | Control in the platform |

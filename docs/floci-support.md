@@ -2,6 +2,15 @@
 
 The platform runs its AWS code against [Floci](https://floci.io/) 2.3.0 on `localhost:4566`. So the labs need no AWS account. This page records what was probed against that image. That way a lab never claims a service the emulator does not answer. The probe made one real call per service in `us-east-1` and `eu-west-1`.
 
+The same code runs in both places:
+
+```mermaid
+flowchart LR
+  A[The same boto3 code] --> B[Floci on your laptop]
+  A --> C[AWS in production]
+  B --> D[Labs need no account]
+```
+
 | Service | Used for | Floci | Evidence |
 |---|---|---|---|
 | Bedrock Runtime | Second model provider | Answers Converse; the reply is a stub | `converse` returns `Floci stub response for model=<id>` and accepts any model id |

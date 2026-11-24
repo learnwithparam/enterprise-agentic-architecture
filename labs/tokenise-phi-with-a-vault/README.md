@@ -11,6 +11,11 @@ provider's logs and in every trace.
 `[NAME_1]`. The real values wait in a vault for that one case. When the reply comes back, the tokens are
 swapped for the real values. The vault is sealed with a key of the tenant, so another tenant cannot open it.
 
+## What you will learn
+
+- Trace personal data out of a prompt and back into the reply.
+- Prove that a vault knows only its own tokens.
+
 ## Prerequisites
 
 [uv](https://docs.astral.sh/uv/) only. No Floci or API key is needed. The sealing and the tenant wall are
@@ -67,6 +72,30 @@ Step 1 fails: a phone number would reach the model. Put it back.
 
 The vault is a row in the tenant's own table, sealed with AES-GCM under a key kept in SSM for that case.
 Delete the key and the vault cannot be read. A second tenant with the same case id gets nothing back.
+
+## Check yourself
+
+<details>
+<summary>Does the model ever read a patient's phone number?</summary>
+
+No. It reads a token. The vault swaps the number back into the reply.
+
+</details>
+
+<details>
+<summary>The same name appears twice in one case. How many tokens does it get?</summary>
+
+One. The same value always gets the same token inside one case.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#7 Catch German patient names before the model sees them](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/7)
+- [#8 Redact personal data from model prompts](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/8)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

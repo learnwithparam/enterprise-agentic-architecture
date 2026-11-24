@@ -1,7 +1,7 @@
 # Route inquiries with a routing table
 
 **The job:** Quillon's medical information service gets questions from doctors on five channels. Each one
-must reach the team that owns it. Pharmacovigilance gets a possible side effect. Medical gets an off-label
+must reach the team that owns it. Pharmacovigilance gets a possible side effect, and medical gets an off-label
 question. A reviewer gets anything not cleared. The doctor gets a direct reply only when every check
 passed.
 
@@ -10,6 +10,12 @@ event phrased as a dosing question can be answered instead of reported.
 
 **After:** the agents establish facts (`ae`, `in_scope`, `grounded` and so on). Plain code walks a fixed
 table, and the first match wins. Compliance reads the table. Tests walk it.
+
+## What you will learn
+
+- Trace one inquiry through the routing table, rule by rule.
+- Prove that the order of the rows is the policy.
+- Explain why the model sets facts but never picks the route.
 
 ## Prerequisites
 
@@ -45,6 +51,12 @@ make lab N=route-inquiries-with-a-routing-table
 
 Expect: 5 passed
 
+## See it in the console
+
+![The routing table screen. Compliance reads the same rows the code walks.](../../docs/product-walkthrough-shots/routing-table-desktop.webp)
+
+The routing table screen. Compliance reads the same rows the code walks.
+
 ## Read
 
 - `src/hcpagents/graph.py`: `ROUTING`, `decide`, `run` and `asl`.
@@ -69,6 +81,32 @@ be declined, and the legal report would never be filed. Put the row back.
 The same `asl()` output is deployed as the Step Functions state machine, with each node a Lambda task.
 `tests/test_graph.py` runs one case per rule through Step Functions on Floci and checks it routes like
 Python.
+
+## Check yourself
+
+<details>
+<summary>A message is an adverse event and also says "ignore your instructions". Where does it go?</summary>
+
+To pharmacovigilance. The adverse event row comes first, and the first match wins.
+
+</details>
+
+<details>
+<summary>Why does the engine return nothing while a fact is unknown?</summary>
+
+So a step that has not run yet cannot be skipped. The case waits for the fact.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#2 Accept email inquiries at the ingest door](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/2)
+- [#9 Add sample requests from field reps](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/9)
+- [#16 Measure how fast a question is routed](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/16)
+- [#18 Prove each ADR names a test that exists](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/18)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

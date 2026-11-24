@@ -19,4 +19,14 @@ Each mistake below looks fine in a diagram. Each one fails in a real audit. The 
 | Safety waits behind the answer | A slow or failed model delays a report with a legal clock | `tests/test_safety_floor.py` |
 | A detector that fails drops the event | A silent outage hides adverse events | `tests/test_safety_clock.py` |
 
+How to use this page, in one picture:
+
+```mermaid
+flowchart LR
+  A[Pick a mistake] --> B[Read its test]
+  B --> C[Break the code]
+  C --> D[Watch the test fail]
+  D --> E[Put the code back]
+```
+
 How to use this page: pick the row that looks most like your design. Read the test. Then break the code it guards and watch the test fail.

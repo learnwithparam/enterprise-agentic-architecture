@@ -10,6 +10,11 @@ pharmacovigilance. A detector that stopped quietly dropped notes.
 goes to pharmacovigilance. If the detector fails, or is silent for two hours, a person screens each note
 from a manual queue. Each safety intake has one business day to be acknowledged. A late one is flagged once.
 
+## What you will learn
+
+- Explain what happens to safety notes when the detector is down.
+- Prove that no note is dropped.
+
 ## Prerequisites
 
 [uv](https://docs.astral.sh/uv/). No Docker, no API key. The lab test fakes the store and the ledger in memory.
@@ -53,8 +58,31 @@ The first test fails: a detector silent for three hours is still treated as heal
 
 ## What production adds
 
-A real business calendar with public holidays for each country, a page for the person on call, and an alarm
+A real business calendar with public holidays for each country. A page for the person on call, and an alarm
 on the age of the oldest item in the manual queue.
+
+## Check yourself
+
+<details>
+<summary>The detector is down. Where does a new note go?</summary>
+
+To the manual queue, where a person reads it.
+
+</details>
+
+<details>
+<summary>A signal arrives on Friday. When is the acknowledgment due?</summary>
+
+On Monday, one business day later.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#15 Test day zero and quotes on safety reports](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/15)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

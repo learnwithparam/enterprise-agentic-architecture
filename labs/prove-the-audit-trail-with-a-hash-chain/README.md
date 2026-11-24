@@ -10,7 +10,12 @@ the real one.
 **After:** each ledger entry is hashed together with the hash before it (`ledger.digest`). So editing any
 past entry breaks the chain at that entry. Every tenth hash is signed with a KMS key. Every entry is also
 written to an S3 bucket under Object Lock in compliance mode for ten years. An insider may rewrite the
-chain from the edit onwards. That person still cannot forge the signatures or delete the archived copies.
+chain from the edit onwards, but still cannot forge the signatures or delete the archived copies.
+
+## What you will learn
+
+- Prove that an edit to any past entry is found.
+- Explain why recomputing one hash only moves the break.
 
 ## Prerequisites
 
@@ -46,6 +51,12 @@ make lab N=prove-the-audit-trail-with-a-hash-chain
 
 Expect: 5 passed
 
+## See it in the console
+
+![Tamper with the ledger. The chain breaks at the edited entry.](../../docs/product-walkthrough-shots/ledger-tamper-desktop.webp)
+
+Tamper with the ledger. The chain breaks at the edited entry.
+
 ## Read
 
 - `src/hcpagents/ledger.py`: `digest`, `append`, `verify`, `tamper`, `restore`, `try_delete_archive`.
@@ -56,7 +67,7 @@ Expect: 5 passed
 
 - An untouched chain verifies, and each hash depends on the one before it.
 - Changing a past route from `pv` to `send` breaks the chain at exactly that entry.
-- Recomputing that entry's hash only moves the break to the next entry, so a forger has to rewrite every
+- Recomputing that entry's hash only moves the break to the next entry. A forger has to rewrite every
   later entry, which the signed checkpoints and the locked archive catch.
 - On Floci, deleting an archived entry is refused by Object Lock.
 
@@ -70,6 +81,29 @@ or reordered without changing any hash. Put it back.
 
 The same code runs against DynamoDB, KMS and S3 in the client's account. The archive bucket sits in a
 separate account that the platform team cannot administer.
+
+## Check yourself
+
+<details>
+<summary>Someone changes an old route from pv to send. What does the check show?</summary>
+
+The chain breaks at exactly that entry.
+
+</details>
+
+<details>
+<summary>Why can nobody delete an archived entry?</summary>
+
+The archive bucket uses Object Lock, which refuses the delete.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#10 Export an audit pack for each case](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/10)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

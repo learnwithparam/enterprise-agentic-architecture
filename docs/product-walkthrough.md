@@ -19,6 +19,16 @@ The AI never writes a sentence a doctor reads. Three small agents on Claude Haik
 
 Every decision lands in a hash-chained ledger. S3 Object Lock archives the ledger. Every permission comes from Cedar policies in Verified Permissions. Every change ships only through an eval gate. The gate fails on one missed adverse event.
 
+The screens, in the order this page shows them:
+
+```mermaid
+flowchart LR
+  A[How it is built] --> B[Five cases, five routes]
+  B --> C[Where humans work]
+  C --> D[When it says no]
+  D --> E[Agents, releases and proof]
+```
+
 ## Before you record
 
 - **Start the stack:** `make up` starts Floci, the local AWS emulator, and provisions every resource.

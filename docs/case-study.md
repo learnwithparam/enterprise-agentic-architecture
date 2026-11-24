@@ -103,6 +103,16 @@ The control plane around it is the policy kernel, Cedar, the autonomy ladder, th
 | Improver | Runs candidates against the gate | A new prompt or router | Promotes anything |
 | Supervisor | Assigns and breaks ties by policy | Conflicts it cannot settle | Overrides the kernel |
 
+This picture shows who decides.
+
+```mermaid
+flowchart LR
+  A[An agent wants to act] --> B{Does it lower risk?}
+  B -->|yes| C[Agent acts alone]
+  B -->|no| D[Proposal to a person]
+  D --> E[Person decides and signs]
+```
+
 The rule: **an agent acts alone only in the direction that lowers risk.** Sending, contacting and promoting are proposals. Some actions are never open to an agent.
 
 **The policy kernel.** Agents choose how to do a step. The kernel owns which steps exist, their order, which facts each may set and the route those facts imply. A ten-rule routing table is walked in order after every step; the first rule that matches decides, and a rule whose fact is unknown waits instead of guessing. Safety comes first, so an adverse event stops the case before the model has classified the question. A plan that skips the screen, rewrites a fact or loops past its limit is refused and the case goes to a person. The same table generates the Step Functions definition, so a picture of it cannot drift from the code.
@@ -110,6 +120,14 @@ The rule: **an agent acts alone only in the direction that lowers risk.** Sendin
 **Model routing.** A pure function picks Haiku 5.5 for high-volume work, Sonnet 5.5 for planning and any failed try, and a person after that or when the budget is gone. Nothing else can be returned.
 
 **Guardrails, in the order they fire.**
+
+```mermaid
+flowchart LR
+  A[Wrap inquiry as data] --> B[Guard every tool call]
+  B --> C[Check schema and ids]
+  C --> D[Match every sentence]
+  D --> E[Check again at send]
+```
 
 1. The inquiry text is wrapped as untrusted data; a test checks it cannot close its own wrapper.
 2. Every tool call passes a guard: the tool must be on an allowlist and target the case's own country and product, and then Verified Permissions must allow it.
@@ -123,6 +141,16 @@ The rule: **an agent acts alone only in the direction that lowers risk.** Sendin
 **Handoffs and recording.** A case that needs a human is published to EventBridge and lands in that team's SQS queue: `ReviewNeeded` for Medical, `SafetySignal` for pharmacovigilance with the quoted words and the date received (day zero for the reporting clock). Every step appends to the hash-chained ledger, with personal data sealed under a key per person, so erasing a person deletes the key and leaves the chain intact.
 
 **Traceability.** From any sentence a doctor received you can walk back to the block, its version and its MLR approval; from the case to the agent calls, the prompt version, the release and the trace; from any human action to the Cedar policy file that allowed or refused it. Each ledger entry carries the hash of the one before it, is copied to S3 under Object Lock, and the chain head is signed with KMS every ten entries.
+
+This picture shows how a release gets better.
+
+```mermaid
+flowchart LR
+  A[Reviewer corrections] --> B[Improver proposes]
+  B --> C[Candidate release]
+  C --> D[Eval gate]
+  D --> E[A person promotes]
+```
 
 **Self-improvement, proven per release.** A release pins the prompts, the router, the retrieval setup and the policy table. It gets a hash for an id. Reviewer corrections become proposals from the improver. The improver promotes nothing. A candidate release runs the eval gate. Safety metrics are absolute (adverse-event recall 1.0, zero ungrounded sentences, zero unsafe automatic sends, zero off-allowlist calls). Quality and cost are compared with the baseline release. A person promotes it. The Releases page shows each metric across releases. The guardian trips a country's kill switch if reviewers start rejecting drafts.
 

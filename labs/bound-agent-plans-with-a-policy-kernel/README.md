@@ -6,9 +6,14 @@ safe to run on a regulated message if some part of the system is not negotiable 
 **Before:** the agent calls tools in whatever order the model picks. A plan that skips the adverse-event
 screen produces a fluent reply and no safety report.
 
-**After:** agents choose how to do a step; the kernel owns which steps exist, their order, which facts each
+**After:** agents choose how to do a step. The kernel owns which steps exist, their order, which facts each
 may set, and how many cycles a loop may take. Every step is checked before it runs and every route before
 it is returned. A violation fails closed to a reviewer, with nothing drafted or sent.
+
+## What you will learn
+
+- Explain how a kernel keeps a plan in order.
+- Prove that a late step cannot rewrite the adverse event fact.
 
 ## Prerequisites
 
@@ -65,6 +70,28 @@ out-of-order test fails: a plan could now run retrieval before the safety screen
 
 LangGraph runs each agent's reasoning graph inside one kernel step, and a test walks every transition
 of the graph through the kernel (`tests/test_kernel.py`).
+
+## Check yourself
+
+<details>
+<summary>A plan tries to run retrieval before the safety screen. What happens?</summary>
+
+The kernel refuses the step because it is out of order.
+
+</details>
+
+<details>
+<summary>What does a rule break turn into?</summary>
+
+A review route. It never becomes a send.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 

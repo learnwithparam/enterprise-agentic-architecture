@@ -9,6 +9,11 @@ words of the question. It must never be the source of a reply.
 only orders what the gate lets through (ADR 0012). A rep never sees a doctor-only answer. The chatbot sees
 only its own script, word for word.
 
+## What you will learn
+
+- Explain why a gate runs before ranking, not after.
+- Prove that withdrawn, expired and foreign content is never a candidate.
+
 ## Prerequisites
 
 Docker, [uv](https://docs.astral.sh/uv/) and `make up`. The first run downloads the local embedding model,
@@ -42,6 +47,12 @@ make lab N=retrieve-behind-a-facet-gate
 
 Expect: `4 passed`
 
+## See it in the console
+
+![Withdraw a content block. From that moment it is never a candidate again.](../../docs/product-walkthrough-shots/withdraw-content-desktop.webp)
+
+Withdraw a content block. From that moment it is never a candidate again.
+
 ## Read
 
 - `src/hcpagents/retrieval.py`: the `GATE` constant and `_rank`.
@@ -65,6 +76,31 @@ Then delete the `audience` line from `GATE`. The fourth test fails: the kidney a
 ## What production adds
 
 A re-index on every content change, and a cache that forgets a block the moment it is withdrawn.
+
+## Check yourself
+
+<details>
+<summary>A question quotes a withdrawn block word for word. Is the block returned?</summary>
+
+No. The gate removes it before ranking, however well it matches.
+
+</details>
+
+<details>
+<summary>A field rep asks about kidney dosing. What do they get?</summary>
+
+No doctors-only block. The audience line in the gate keeps it out.
+
+</details>
+
+## Try next
+
+Pick a learner issue. Write the test that fails first, then fix it.
+
+- [#5 Match the reply language to the doctor](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/5)
+- [#6 Prove cross-language retrieval with German queries](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/6)
+- [#25 Add hard negatives to the retrieval eval](https://github.com/learnwithparam/enterprise-agentic-architecture/issues/25)
+- [Every open learner issue](https://github.com/learnwithparam/enterprise-agentic-architecture/issues?q=is%3Aopen+label%3Aassignment)
 
 ## New words
 
